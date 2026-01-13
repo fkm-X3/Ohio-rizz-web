@@ -1,3 +1,3 @@
 # Placeholder
 
-Sigma ohio gritty
+Sigma ohio gritty.

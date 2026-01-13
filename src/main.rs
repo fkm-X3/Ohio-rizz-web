@@ -1,5 +1,5 @@
 use winit::event::{Event, WindowEvent};
-use winit::event_loop::{ControlFlow, EventLoop};
+use winit::event_loop::EventLoop;
 use winit::window::WindowBuilder;
 use softbuffer::{Context, Surface};
 use std::num::NonZeroU32;
@@ -23,52 +23,49 @@ fn main() {
     let html_content = std::fs::read_to_string("verify.html").unwrap_or_else(|_| "<html><body><h1>Hello</h1><p>World</p></body></html>".to_string());
     let c_html = CString::new(html_content).unwrap();
 
-    let window_loop = window.clone();
+    let window_clone = window.clone();
 
-    event_loop.run(move |event, target| {
-        target.set_control_flow(ControlFlow::Wait);
+    let _ = event_loop.run(move |event, _target| {
 
         match event {
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,
                 window_id,
-            } if window_id == window_loop.id() => target.exit(),
-            
+            } if window_id == window_clone.id() => {
+                std::process::exit(0);
+            },
+
             Event::WindowEvent {
                 event: WindowEvent::RedrawRequested,
                 window_id,
-            } if window_id == window_loop.id() => {
+            } if window_id == window_clone.id() => {
                 let (width, height) = {
-                    let size = window_loop.inner_size();
+                    let size = window_clone.inner_size();
                     (size.width, size.height)
                 };
                 
-                if width == 0 || height == 0 {
-                    return;
-                }
-                
-                let nzu_width = NonZeroU32::new(width).unwrap();
-                let nzu_height = NonZeroU32::new(height).unwrap();
+                if width != 0 && height != 0 {
+                    let nzu_width = NonZeroU32::new(width).unwrap();
+                    let nzu_height = NonZeroU32::new(height).unwrap();
 
-                surface.resize(nzu_width, nzu_height).unwrap();
-                
-                let mut buffer = surface.buffer_mut().unwrap();
-                
-                // Call C++ to render into the buffer
-                // buffer is a slice of u32, we pass it as a pointer
-                unsafe {
-                    render_page(
-                        c_html.as_ptr(),
-                        buffer.as_mut_ptr(),
-                        width as i32,
-                        height as i32
-                    );
+                    surface.resize(nzu_width, nzu_height).unwrap();
+
+                    let mut buffer = surface.buffer_mut().unwrap();
+
+                    unsafe {
+                        render_page(
+                            c_html.as_ptr(),
+                            buffer.as_mut_ptr(),
+                            width as i32,
+                            height as i32,
+                        );
+                    }
+
+                    buffer.present().unwrap();
                 }
-                
-                buffer.present().unwrap();
             },
             Event::AboutToWait => {
-                window_loop.request_redraw();
+                window_clone.request_redraw();
             }
              _ => {}
         }

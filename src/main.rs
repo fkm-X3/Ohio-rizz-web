@@ -8,7 +8,7 @@ use std::ffi::CString;
 use std::sync::Arc;
 
 extern "C" {
-    fn render_page(html: *const i8, buffer: *mut u32, width: i32, height: i32);
+    fn render_frame(html: *const i8, buffer: *mut u32, width: i32, height: i32);
 }
 
 fn main() {
@@ -53,7 +53,7 @@ fn main() {
                     let mut buffer = surface.buffer_mut().unwrap();
 
                     unsafe {
-                        render_page(
+                        render_frame(
                             c_html.as_ptr(),
                             buffer.as_mut_ptr(),
                             width as i32,

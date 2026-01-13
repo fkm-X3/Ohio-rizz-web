@@ -1,9 +1,11 @@
-#include "engine.hpp"
+
+#include <cctype>
 #include <cstdint>
 #include <cstring>
-
-
+#include <memory>
+#include <stack>
 #include <string>
+#include <vector>
 
 // A simple 5x7 bitmap font for ASCII 32..126
 // Each line is a byte, bits 0..4 are pixels.
@@ -109,128 +111,291 @@ static const uint8_t font5x7[][5] = {
     {0x00, 0x00, 0x00, 0x00, 0x00}, // ~ (not impl)
 };
 
+static void draw_pixel(uint32_t *buffer, int buf_w, int buf_h, int x, int y,
+                       uint32_t color) {
+  if (x >= 0 && x < buf_w && y >= 0 && y < buf_h) {
+    buffer[y * buf_w + x] = color;
+  }
+}
+
 static void draw_char(uint32_t *buffer, int buf_w, int buf_h, int x, int y,
                       char c, uint32_t color) {
   if (c < 32 || c > 126)
     return;
   const uint8_t *glyph = font5x7[c - 32];
 
-  // 5x7
   for (int row = 0; row < 5; ++row) {
     int py = y + row;
     if (py < 0 || py >= buf_h)
       continue;
 
     uint8_t bits = glyph[row];
-    // The font data above: e.g. 0x04 = 00000100 -> bit 2 is set, meaning pixel
-    // at x+2 wait, usually standard implementation: each byte is a column? OR
-    // each byte is a row? Let's assume the data I put above: {0x04, 0x04, 0x04,
-    // 0x00, 0x04} for '!' Row 0: 0x04 (..1..) Row 1: 0x04 (..1..)
-    // ...
-    // So bits correspond to X.
-    // Let's iterate bits 0..4 (or 4..0). 0x04 is bit 2.
-
-    for (int col = 0; col < 5; ++col) { // 5 bits wide
-      int px = x + col;
-      if (px < 0 || px >= buf_w)
-        continue;
-
-      // Check bit: (bits >> (4-col)) & 1 usually, or just (bits >> col) & 1
-      // depending on endianness of my brain 0x04 = binary 00000100. If we want
-      // that to be center, let's say: col 0 = bit 4 col 1 = bit 3 col 2 = bit 2
-      // col 3 = bit 1
-      // col 4 = bit 0
+    for (int col = 0; col < 5; ++col) {
       if ((bits >> (4 - col)) & 1) {
-        buffer[py * buf_w + px] = color;
+        draw_pixel(buffer, buf_w, buf_h, x + col, py, color);
       }
     }
   }
 }
 
-static void draw_string(uint32_t *buffer, int buf_w, int buf_h, int x, int y,
-                        const std::string &text, uint32_t color, int scale) {
+// Node structure for DOM tree
+struct Node {
+  std::string tag;
+  std::string text;
+  std::vector<std::shared_ptr<Node>> children;
+  bool is_text;
+  bool is_block;
+
+  Node() : is_text(false), is_block(false) {}
+};
+
+// Helper to clean whitespace - collapse sequence of whitespace to single space
+std::string clean_whitespace(const std::string &input) {
+  std::string result;
+  bool space_seen = false;
+  for (char c : input) {
+    if (std::isspace(static_cast<unsigned char>(c))) {
+      if (!space_seen) {
+        result += ' ';
+        space_seen = true;
+      }
+    } else {
+      result += c;
+      space_seen = false;
+    }
+  }
+  return result;
+}
+
+// Simple parser that builds a DOM tree
+std::shared_ptr<Node> parse_html(const std::string &html) {
+  auto root = std::make_shared<Node>();
+  root->tag = "root";
+  root->is_block = true; // Root is a block
+
+  std::stack<std::shared_ptr<Node>> stack;
+  stack.push(root);
+
+  size_t pos = 0;
+  while (pos < html.length()) {
+    size_t lt = html.find('<', pos);
+
+    // Add text before tag
+    if (lt > pos || lt == std::string::npos) {
+      std::string text_part = html.substr(
+          pos, (lt == std::string::npos) ? std::string::npos : lt - pos);
+      std::string cleaned = clean_whitespace(text_part);
+      if (!cleaned.empty() &&
+          !(cleaned.size() == 1 &&
+            cleaned[0] == ' ')) { // Skip empty/just space if desirable, but
+                                  // actually space matters
+        // For simplicity, add it. Logic in render can decide to skip
+        // whitespace-only text at start of block if needed.
+        auto text_node = std::make_shared<Node>();
+        text_node->is_text = true;
+        text_node->text = cleaned;
+        stack.top()->children.push_back(text_node);
+      }
+    }
+
+    if (lt == std::string::npos)
+      break;
+
+    size_t gt = html.find('>', lt);
+    if (gt == std::string::npos)
+      break; // Error
+
+    std::string tag_content = html.substr(lt + 1, gt - lt - 1);
+
+    bool is_closing = (!tag_content.empty() && tag_content[0] == '/');
+
+    if (is_closing) {
+      if (stack.size() > 1) { // Never pop root
+        stack.pop();
+      }
+    } else {
+      // Opening tag
+      std::string tag_name = tag_content;
+      // Handle parsing "div class=..." -> "div"
+      size_t space_pos = tag_name.find(' ');
+      if (space_pos != std::string::npos) {
+        tag_name = tag_name.substr(0, space_pos);
+      }
+
+      auto node = std::make_shared<Node>();
+      node->tag = tag_name;
+
+      // Determine display type
+      if (tag_name == "div" || tag_name == "h1" || tag_name == "p" ||
+          tag_name == "body" || tag_name == "html") {
+        node->is_block = true;
+      } else {
+        node->is_block = false; // span, b, etc.
+      }
+
+      stack.top()->children.push_back(node);
+
+      // Assume no void tags (like img, br) for this specific v0.2 spec or
+      // handle them if needed. For v0.2 (div, span), all have closing tags.
+      stack.push(node);
+    }
+
+    pos = gt + 1;
+  }
+  return root;
+}
+
+// Layout state
+struct LayoutState {
+  int x;
+  int y;
+  int width;
+  int height;
+  uint32_t *buffer;
+};
+
+void render_node(std::shared_ptr<Node> node, LayoutState &state) {
+  if (!node)
+    return;
+
+  if (node->is_text) {
+    // Render text
+    uint32_t color = 0xFF000000; // Black text default
+    // Simple word wrap or just overflow? Spec says "Simple box model (no
+    // margins yet)" Let's implement character iteration.
+    for (char c : node->text) {
+      draw_char(state.buffer, state.width, state.height, state.x, state.y, c,
+                color);
+      state.x += 6; // advance curser
+      // Simple wrap
+      if (state.x + 6 >= state.width) {
+        state.x = 0;
+        state.y += 8; // Line height
+      }
+    }
+  } else {
+    // Element
+    bool is_blk = node->is_block;
+
+    // Block start logic
+    if (is_blk) {
+      if (state.x != 0) {
+        state.x = 0;
+        state.y += 8;
+      }
+    }
+
+    // Children
+    for (auto &child : node->children) {
+      render_node(child, state);
+    }
+
+    // Block end logic
+    if (is_blk) {
+      if (state.x != 0) {
+        state.x = 0;
+        state.y += 8;
+      }
+    }
+  }
+}
+
+// UI Constants
+const int UI_HEIGHT = 50;
+const uint32_t UI_BG_COLOR = 0xFFCCCCCC;     // Light Gray
+const uint32_t UI_TEXT_COLOR = 0xFF000000;   // Black
+const uint32_t BUTTON_BG_COLOR = 0xFFAAAAAA; // Darker Gray
+
+void draw_rect(uint32_t *buffer, int buf_w, int buf_h, int x, int y, int w,
+               int h, uint32_t color) {
+  for (int j = 0; j < h; ++j) {
+    for (int i = 0; i < w; ++i) {
+      draw_pixel(buffer, buf_w, buf_h, x + i, y + j, color);
+    }
+  }
+}
+
+void draw_text(uint32_t *buffer, int buf_w, int buf_h, int x, int y,
+               const std::string &text, uint32_t color) {
   int cur_x = x;
   for (char c : text) {
-    // Rudimentary scaling
-    for (int sy = 0; sy < scale; ++sy) {
-      for (int sx = 0; sx < scale; ++sx) {
-        // To support scale, draw_char needs to be smarter or we just call it
-        // with offset? Actually easier to just bake scale into loop or
-        // implementing a scaled_draw_char. For simplicity, let's just do size 1
-        // or we modify draw_char to take scale.
-      }
-    }
-
-    // Simple 1x scale logic for now:
-    if (scale == 1) {
-      draw_char(buffer, buf_w, buf_h, cur_x, y, c, color);
-      cur_x += 6; // 5 width + 1 spacing
-    } else {
-      // quick hack for scale > 1: just draw pixels as blocks
-      if (c < 32 || c > 126)
-        continue;
-      const uint8_t *glyph = font5x7[c - 32];
-      for (int row = 0; row < 5; ++row) {
-        for (int col = 0; col < 5; ++col) {
-          if ((glyph[row] >> (4 - col)) & 1) {
-            // Draw rect of size scale*scale
-            for (int dy = 0; dy < scale; ++dy) {
-              for (int dx = 0; dx < scale; ++dx) {
-                int px = cur_x + col * scale + dx;
-                int py = y + row * scale + dy;
-                if (px >= 0 && px < buf_w && py >= 0 && py < buf_h) {
-                  buffer[py * buf_w + px] = color;
-                }
-              }
-            }
-          }
-        }
-      }
-      cur_x += 6 * scale;
-    }
+    draw_char(buffer, buf_w, buf_h, cur_x, y, c, color);
+    cur_x += 6;
   }
 }
 
-// Simple extractor
-std::string extract_tag_content(const std::string &html,
-                                const std::string &tag) {
-  std::string start_tag = "<" + tag + ">";
-  std::string end_tag = "</" + tag + ">";
+void render_ui(uint32_t *buffer, int width, int height,
+               const std::string &url_str) {
+  // 1. Background
+  draw_rect(buffer, width, height, 0, 0, width, UI_HEIGHT, UI_BG_COLOR);
 
-  size_t start = html.find(start_tag);
-  if (start == std::string::npos)
-    return "";
-  start += start_tag.length();
+  // 2. Buttons
+  // [ < ] [ > ] [ R ]
+  int btn_y = 10;
+  int btn_h = 30;
+  int btn_w = 30;
+  int spacing = 10;
+  int x = 10;
 
-  size_t end = html.find(end_tag, start);
-  if (end == std::string::npos)
-    return "";
+  // Back
+  draw_rect(buffer, width, height, x, btn_y, btn_w, btn_h, BUTTON_BG_COLOR);
+  draw_text(buffer, width, height, x + 11, btn_y + 11, "<", UI_TEXT_COLOR);
+  x += btn_w + spacing;
 
-  return html.substr(start, end - start);
+  // Forward
+  draw_rect(buffer, width, height, x, btn_y, btn_w, btn_h, BUTTON_BG_COLOR);
+  draw_text(buffer, width, height, x + 11, btn_y + 11, ">", UI_TEXT_COLOR);
+  x += btn_w + spacing;
+
+  // Refresh
+  draw_rect(buffer, width, height, x, btn_y, btn_w, btn_h, BUTTON_BG_COLOR);
+  draw_text(buffer, width, height, x + 11, btn_y + 11, "R", UI_TEXT_COLOR);
+  x += btn_w + spacing;
+
+  // 3. Address Bar
+  int url_x = x;
+  int url_w = width - x - 10;
+  draw_rect(buffer, width, height, url_x, btn_y, url_w, btn_h,
+            0xFFFFFFFF); // White bg
+  draw_text(buffer, width, height, url_x + 5, btn_y + 11, url_str,
+            UI_TEXT_COLOR);
+
+  // Bottom border
+  draw_rect(buffer, width, height, 0, UI_HEIGHT - 1, width, 1, 0xFF000000);
 }
 
 extern "C" {
-void render_page(const char *html_cstr, uint32_t *buffer, int width,
-                 int height) {
+void render_frame(const char *html_cstr, uint32_t *buffer, int width,
+                  int height) {
   // Clear background
   for (int i = 0; i < width * height; ++i) {
     buffer[i] = 0xFFFFFFFF; // White
   }
 
+  // Render content first? Or UI first? Layers.
+  // Let's parse content.
   std::string html(html_cstr);
+  auto root = parse_html(html);
 
-  // Render H1
-  std::string h1_text = extract_tag_content(html, "h1");
-  if (!h1_text.empty()) {
-    draw_string(buffer, width, height, 20, 20, h1_text, 0xFF000000,
-                3); // Black, 3x scale
-  }
+  // Render Content
+  LayoutState state;
+  state.x = 0;
+  state.y = UI_HEIGHT + 10; // Start below UI
+  state.width = width;
+  state.height = height;
+  state.buffer = buffer;
 
-  // Render P
-  std::string p_text = extract_tag_content(html, "p");
-  if (!p_text.empty()) {
-    draw_string(buffer, width, height, 20, 60, p_text, 0xFF333333,
-                1); // Dark gray, 1x scale
-  }
+  render_node(root, state);
+
+  // Render UI on top
+  // In a real browser, UI might be a separate window or layer,
+  // but here we just draw over the buffer.
+  // Actually, we want to ensure content doesn't draw OVER the UI
+  // if we scroll (not implemented yet), so drawing UI last is safer
+  // if content is simply clipped by window bounds.
+  // But we have state.y starting below UI, so it shouldn't overlap
+  // unless we had negative margins.
+  // Let's draw UI last to be sure it's on top.
+  render_ui(buffer, width, height, "verify.html");
 }
 }

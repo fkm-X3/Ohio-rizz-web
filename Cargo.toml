@@ -1,0 +1,11 @@
+[package]
+name = "rusty_browser"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+winit = "0.29.10"
+softbuffer = "0.4.1"
+
+[build-dependencies]
+cc = "1.0"

@@ -1,0 +1,22 @@
+# Rust
+/target
+/debug
+/release
+**/*.rs.bk
+
+# C++ / Build
+*.pdb
+*.obj
+*.exe
+*.lib
+*.a
+*.o
+*.dll
+
+# Logs
+build.log
+
+# IDE
+.idea
+.vscode
+*.swp

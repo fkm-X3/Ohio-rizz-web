@@ -20,7 +20,7 @@ fn main() {
     let context = Context::new(&window).unwrap();
     let mut surface = Surface::new(&context, &window).unwrap();
 
-    let html_content = std::fs::read_to_string("verify.html").unwrap_or_else(|_| "<html><body><h1>Hello</h1><p>World</p></body></html>".to_string());
+    let html_content = std::fs::read_to_string("index.html").unwrap_or_else(|_| "<html><body><h1>Hello</h1><p>World</p></body></html>".to_string());
     let c_html = CString::new(html_content).unwrap();
 
     let window_clone = window.clone();

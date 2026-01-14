@@ -6,6 +6,8 @@ edition = "2021"
 [dependencies]
 winit = "0.29.10"
 softbuffer = "0.4.1"
+tiny-skia = "0.11"
+fontdue = "0.9"
 
 [build-dependencies]
 cc = "1.0"

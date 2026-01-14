@@ -112,19 +112,24 @@ static void draw_pixel(uint32_t *buffer, int buf_w, int buf_h, int x, int y,
 }
 
 static void draw_char(uint32_t *buffer, int buf_w, int buf_h, int x, int y,
-                      char c, uint32_t color, int scale = 1) {
+                      char c, uint32_t color, double scale_factor,
+                      double font_size_scale = 1.0) {
   if (c < 32 || c > 126)
     return;
   const uint8_t *glyph = font5x7[c - 32];
+
+  double total_scale = scale_factor * font_size_scale;
+  if (total_scale < 1.0)
+    total_scale = 1.0;
 
   for (int row = 0; row < 5; ++row) {
     uint8_t bits = glyph[row];
     for (int col = 0; col < 5; ++col) {
       if ((bits >> (4 - col)) & 1) {
-        for (int sy = 0; sy < scale; ++sy) {
-          for (int sx = 0; sx < scale; ++sx) {
-            draw_pixel(buffer, buf_w, buf_h, x + col * scale + sx,
-                       y + row * scale + sy, color);
+        for (int sy = 0; sy < (int)total_scale; ++sy) {
+          for (int sx = 0; sx < (int)total_scale; ++sx) {
+            draw_pixel(buffer, buf_w, buf_h, x + (int)(col * total_scale) + sx,
+                       y + (int)(row * total_scale) + sy, color);
           }
         }
       }
@@ -140,7 +145,7 @@ struct Style {
   bool has_bg;
 
   Style()
-      : color(0xFF000000), bg_color(0xFFFFFFFF), font_size(12), has_bg(false) {}
+      : color(0xFF000000), bg_color(0xFFFFFFFF), font_size(16), has_bg(false) {}
 };
 
 struct StyleRule {
@@ -355,22 +360,23 @@ void apply_styles(std::shared_ptr<Node> node,
         node->computed_style.bg_color = rule.style.bg_color;
         node->computed_style.has_bg = true;
       }
-      if (rule.style.font_size != 12) {
+      if (rule.style.font_size != 16) {
         node->computed_style.font_size = rule.style.font_size;
       }
     }
+  }
+
+  // Default styles if not overridden
+  if (node->tag == "h1" && node->computed_style.font_size == 16) {
+    node->computed_style.font_size = 32;
+  } else if (node->tag == "h2" && node->computed_style.font_size == 16) {
+    node->computed_style.font_size = 24;
   }
 
   for (auto &child : node->children) {
     apply_styles(child, rules);
   }
 }
-
-// UI Constants
-const int UI_HEIGHT = 50;
-const uint32_t UI_BG_COLOR = 0xFFCCCCCC;     // Light Gray
-const uint32_t UI_TEXT_COLOR = 0xFF000000;   // Black
-const uint32_t BUTTON_BG_COLOR = 0xFFAAAAAA; // Darker Gray
 
 void draw_rect(uint32_t *buffer, int buf_w, int buf_h, int x, int y, int w,
                int h, uint32_t color) {
@@ -381,55 +387,6 @@ void draw_rect(uint32_t *buffer, int buf_w, int buf_h, int x, int y, int w,
   }
 }
 
-void draw_text(uint32_t *buffer, int buf_w, int buf_h, int x, int y,
-               const std::string &text, uint32_t color) {
-  int cur_x = x;
-  for (char c : text) {
-    draw_char(buffer, buf_w, buf_h, cur_x, y, c, color);
-    cur_x += 6;
-  }
-}
-
-void render_ui(uint32_t *buffer, int width, int height,
-               const std::string &url_str) {
-  // 1. Background
-  draw_rect(buffer, width, height, 0, 0, width, UI_HEIGHT, UI_BG_COLOR);
-
-  // 2. Buttons
-  // [ < ] [ > ] [ R ]
-  int btn_y = 10;
-  int btn_h = 30;
-  int btn_w = 30;
-  int spacing = 10;
-  int x = 10;
-
-  // Back
-  draw_rect(buffer, width, height, x, btn_y, btn_w, btn_h, BUTTON_BG_COLOR);
-  draw_text(buffer, width, height, x + 11, btn_y + 11, "<", UI_TEXT_COLOR);
-  x += btn_w + spacing;
-
-  // Forward
-  draw_rect(buffer, width, height, x, btn_y, btn_w, btn_h, BUTTON_BG_COLOR);
-  draw_text(buffer, width, height, x + 11, btn_y + 11, ">", UI_TEXT_COLOR);
-  x += btn_w + spacing;
-
-  // Refresh
-  draw_rect(buffer, width, height, x, btn_y, btn_w, btn_h, BUTTON_BG_COLOR);
-  draw_text(buffer, width, height, x + 11, btn_y + 11, "R", UI_TEXT_COLOR);
-  x += btn_w + spacing;
-
-  // 3. Address Bar
-  int url_x = x;
-  int url_w = width - x - 10;
-  draw_rect(buffer, width, height, url_x, btn_y, url_w, btn_h,
-            0xFFFFFFFF); // White bg
-  draw_text(buffer, width, height, url_x + 5, btn_y + 11, url_str,
-            UI_TEXT_COLOR);
-
-  // Bottom border
-  draw_rect(buffer, width, height, 0, UI_HEIGHT - 1, width, 1, 0xFF000000);
-}
-
 // Layout state
 struct LayoutState {
   int x;
@@ -437,6 +394,7 @@ struct LayoutState {
   int width;
   int height;
   uint32_t *buffer;
+  double scale_factor;
 };
 
 void render_node(std::shared_ptr<Node> node, LayoutState &state,
@@ -460,15 +418,19 @@ void render_node(std::shared_ptr<Node> node, LayoutState &state,
   if (node->is_text) {
     // Render text
     uint32_t color = current_style.color;
-    int scale = current_style.font_size / 7;
-    if (scale < 1)
-      scale = 1;
-    int char_w = 6 * scale;
-    int char_h = 8 * scale;
+
+    // font_size is in CSS pixels.
+    // Our base glyph is 5x7. Let's say a 16px font-size means the glyph height
+    // should be ~16px. So scale for the glyph is font_size / 7.0.
+    double font_scale = (double)current_style.font_size / 7.0;
+    double total_scale = state.scale_factor * font_scale;
+
+    int char_w = (int)(6.0 * total_scale);
+    int char_h = (int)(9.0 * total_scale); // 7 + 2 for spacing
 
     for (char c : node->text) {
       draw_char(state.buffer, state.width, state.height, state.x, state.y, c,
-                color, scale);
+                color, state.scale_factor, font_scale);
       state.x += char_w;
       if (state.x + char_w >= state.width) {
         state.x = 0;
@@ -479,17 +441,20 @@ void render_node(std::shared_ptr<Node> node, LayoutState &state,
     // Element
     bool is_blk = node->is_block;
 
+    double font_scale = (double)current_style.font_size / 7.0;
+    int line_height =
+        (int)(state.scale_factor * font_scale * 10.0); // 1.4ish line height
+
     // Block start logic
     if (is_blk) {
       if (state.x != 0) {
         state.x = 0;
-        state.y += (current_style.font_size / 7) * 8;
+        state.y += line_height;
       }
       // Simple background rect for block elements
       if (node->computed_style.has_bg) {
         draw_rect(state.buffer, state.width, state.height, state.x, state.y,
-                  state.width, (current_style.font_size / 7) * 8 + 4,
-                  node->computed_style.bg_color);
+                  state.width, line_height, node->computed_style.bg_color);
       }
     }
 
@@ -500,26 +465,22 @@ void render_node(std::shared_ptr<Node> node, LayoutState &state,
 
     // Block end logic
     if (is_blk) {
-      if (state.x != 0) {
+      if (state.x != 0 || !node->children.empty()) {
         state.x = 0;
-        state.y += (current_style.font_size / 7) * 8;
+        state.y += line_height;
       }
     }
   }
 }
 
-// (Moved above render_node)
-
 extern "C" {
 void render_frame(const char *html_cstr, uint32_t *buffer, int width,
-                  int height) {
+                  int height, double scale_factor) {
   // Clear background
   for (int i = 0; i < width * height; ++i) {
     buffer[i] = 0xFFFFFFFF; // White
   }
 
-  // Render content first? Or UI first? Layers.
-  // Let's parse content.
   std::string html(html_cstr);
   std::vector<StyleRule> styles;
   auto root = parse_html(html, styles);
@@ -528,22 +489,12 @@ void render_frame(const char *html_cstr, uint32_t *buffer, int width,
   // Render Content
   LayoutState state;
   state.x = 0;
-  state.y = UI_HEIGHT + 10; // Start below UI
+  state.y = 0; // Start at top
   state.width = width;
   state.height = height;
   state.buffer = buffer;
+  state.scale_factor = scale_factor;
 
   render_node(root, state);
-
-  // Render UI on top
-  // In a real browser, UI might be a separate window or layer,
-  // but here we just draw over the buffer.
-  // Actually, we want to ensure content doesn't draw OVER the UI
-  // if we scroll (not implemented yet), so drawing UI last is safer
-  // if content is simply clipped by window bounds.
-  // But we have state.y starting below UI, so it shouldn't overlap
-  // unless we had negative margins.
-  // Let's draw UI last to be sure it's on top.
-  render_ui(buffer, width, height, "verify.html");
 }
 }

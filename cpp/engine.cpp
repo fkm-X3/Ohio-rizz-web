@@ -1,4 +1,3 @@
-
 #include <cctype>
 #include <cstdint>
 #include <cstring>
@@ -6,12 +5,6 @@
 #include <stack>
 #include <string>
 #include <vector>
-
-// A simple 5x7 bitmap font for ASCII 32..126
-// Each line is a byte, bits 0..4 are pixels.
-// We'll define a subset or a procedural generation for simplicity,
-// but to be robust let's include a minimal set for the demo text.
-// "Hello Browser" "This is rendered in C++ and Rust."
 
 static const uint8_t font5x7[][5] = {
     {0x00, 0x00, 0x00, 0x00, 0x00}, // space
@@ -119,23 +112,124 @@ static void draw_pixel(uint32_t *buffer, int buf_w, int buf_h, int x, int y,
 }
 
 static void draw_char(uint32_t *buffer, int buf_w, int buf_h, int x, int y,
-                      char c, uint32_t color) {
+                      char c, uint32_t color, int scale = 1) {
   if (c < 32 || c > 126)
     return;
   const uint8_t *glyph = font5x7[c - 32];
 
   for (int row = 0; row < 5; ++row) {
-    int py = y + row;
-    if (py < 0 || py >= buf_h)
-      continue;
-
     uint8_t bits = glyph[row];
     for (int col = 0; col < 5; ++col) {
       if ((bits >> (4 - col)) & 1) {
-        draw_pixel(buffer, buf_w, buf_h, x + col, py, color);
+        for (int sy = 0; sy < scale; ++sy) {
+          for (int sx = 0; sx < scale; ++sx) {
+            draw_pixel(buffer, buf_w, buf_h, x + col * scale + sx,
+                       y + row * scale + sy, color);
+          }
+        }
       }
     }
   }
+}
+
+// CSS Style structure
+struct Style {
+  uint32_t color;
+  uint32_t bg_color;
+  int font_size;
+  bool has_bg;
+
+  Style()
+      : color(0xFF000000), bg_color(0xFFFFFFFF), font_size(12), has_bg(false) {}
+};
+
+struct StyleRule {
+  std::string selector;
+  Style style;
+};
+
+// Simple color map
+uint32_t parse_color(const std::string &val) {
+  if (val == "red")
+    return 0xFFFF0000;
+  if (val == "green")
+    return 0xFF00FF00;
+  if (val == "blue")
+    return 0xFF0000FF;
+  if (val == "black")
+    return 0xFF000000;
+  if (val == "white")
+    return 0xFFFFFFFF;
+  if (val == "gray")
+    return 0xFF808080;
+  // Fallback to black
+  return 0xFF000000;
+}
+
+std::vector<StyleRule> parse_css(const std::string &css) {
+  std::vector<StyleRule> rules;
+  size_t pos = 0;
+  while (pos < css.length()) {
+    size_t brace_open = css.find('{', pos);
+    if (brace_open == std::string::npos)
+      break;
+
+    std::string selector = css.substr(pos, brace_open - pos);
+    // Trim selector
+    size_t first = selector.find_first_not_of(" \n\r\t");
+    size_t last = selector.find_last_not_of(" \n\r\t");
+    if (first != std::string::npos)
+      selector = selector.substr(first, (last - first + 1));
+
+    size_t brace_close = css.find('}', brace_open);
+    if (brace_close == std::string::npos)
+      break;
+
+    std::string body = css.substr(brace_open + 1, brace_close - brace_open - 1);
+    Style style;
+
+    size_t prop_pos = 0;
+    while (prop_pos < body.length()) {
+      size_t colon = body.find(':', prop_pos);
+      if (colon == std::string::npos)
+        break;
+      size_t semi = body.find(';', colon);
+      if (semi == std::string::npos)
+        semi = body.length();
+
+      std::string prop = body.substr(prop_pos, colon - prop_pos);
+      std::string val = body.substr(colon + 1, semi - colon - 1);
+
+      // Trim prop/val
+      auto trim = [](std::string &s) {
+        size_t f = s.find_first_not_of(" \n\r\t");
+        size_t l = s.find_last_not_of(" \n\r\t");
+        if (f != std::string::npos)
+          s = s.substr(f, (l - f + 1));
+        else
+          s = "";
+      };
+      trim(prop);
+      trim(val);
+
+      if (prop == "color") {
+        style.color = parse_color(val);
+      } else if (prop == "background-color") {
+        style.bg_color = parse_color(val);
+        style.has_bg = true;
+      } else if (prop == "font-size") {
+        // Simple px parser
+        if (val.find("px") != std::string::npos) {
+          style.font_size = std::stoi(val.substr(0, val.find("px")));
+        }
+      }
+      prop_pos = semi + 1;
+    }
+
+    rules.push_back({selector, style});
+    pos = brace_close + 1;
+  }
+  return rules;
 }
 
 // Node structure for DOM tree
@@ -145,6 +239,7 @@ struct Node {
   std::vector<std::shared_ptr<Node>> children;
   bool is_text;
   bool is_block;
+  Style computed_style;
 
   Node() : is_text(false), is_block(false) {}
 };
@@ -168,7 +263,8 @@ std::string clean_whitespace(const std::string &input) {
 }
 
 // Simple parser that builds a DOM tree
-std::shared_ptr<Node> parse_html(const std::string &html) {
+std::shared_ptr<Node> parse_html(const std::string &html,
+                                 std::vector<StyleRule> &out_styles) {
   auto root = std::make_shared<Node>();
   root->tag = "root";
   root->is_block = true; // Root is a block
@@ -185,12 +281,7 @@ std::shared_ptr<Node> parse_html(const std::string &html) {
       std::string text_part = html.substr(
           pos, (lt == std::string::npos) ? std::string::npos : lt - pos);
       std::string cleaned = clean_whitespace(text_part);
-      if (!cleaned.empty() &&
-          !(cleaned.size() == 1 &&
-            cleaned[0] == ' ')) { // Skip empty/just space if desirable, but
-                                  // actually space matters
-        // For simplicity, add it. Logic in render can decide to skip
-        // whitespace-only text at start of block if needed.
+      if (!cleaned.empty() && !(cleaned.size() == 1 && cleaned[0] == ' ')) {
         auto text_node = std::make_shared<Node>();
         text_node->is_text = true;
         text_node->text = cleaned;
@@ -206,7 +297,6 @@ std::shared_ptr<Node> parse_html(const std::string &html) {
       break; // Error
 
     std::string tag_content = html.substr(lt + 1, gt - lt - 1);
-
     bool is_closing = (!tag_content.empty() && tag_content[0] == '/');
 
     if (is_closing) {
@@ -216,10 +306,20 @@ std::shared_ptr<Node> parse_html(const std::string &html) {
     } else {
       // Opening tag
       std::string tag_name = tag_content;
-      // Handle parsing "div class=..." -> "div"
       size_t space_pos = tag_name.find(' ');
       if (space_pos != std::string::npos) {
         tag_name = tag_name.substr(0, space_pos);
+      }
+
+      if (tag_name == "style") {
+        size_t style_end = html.find("</style>", gt);
+        if (style_end != std::string::npos) {
+          std::string css = html.substr(gt + 1, style_end - gt - 1);
+          auto rules = parse_css(css);
+          out_styles.insert(out_styles.end(), rules.begin(), rules.end());
+          pos = style_end + 8;
+          continue;
+        }
       }
 
       auto node = std::make_shared<Node>();
@@ -234,69 +334,35 @@ std::shared_ptr<Node> parse_html(const std::string &html) {
       }
 
       stack.top()->children.push_back(node);
-
-      // Assume no void tags (like img, br) for this specific v0.2 spec or
-      // handle them if needed. For v0.2 (div, span), all have closing tags.
       stack.push(node);
     }
-
     pos = gt + 1;
   }
   return root;
 }
 
-// Layout state
-struct LayoutState {
-  int x;
-  int y;
-  int width;
-  int height;
-  uint32_t *buffer;
-};
-
-void render_node(std::shared_ptr<Node> node, LayoutState &state) {
-  if (!node)
+void apply_styles(std::shared_ptr<Node> node,
+                  const std::vector<StyleRule> &rules) {
+  if (!node || node->is_text)
     return;
 
-  if (node->is_text) {
-    // Render text
-    uint32_t color = 0xFF000000; // Black text default
-    // Simple word wrap or just overflow? Spec says "Simple box model (no
-    // margins yet)" Let's implement character iteration.
-    for (char c : node->text) {
-      draw_char(state.buffer, state.width, state.height, state.x, state.y, c,
-                color);
-      state.x += 6; // advance curser
-      // Simple wrap
-      if (state.x + 6 >= state.width) {
-        state.x = 0;
-        state.y += 8; // Line height
+  // Simple selector match
+  for (const auto &rule : rules) {
+    if (rule.selector == node->tag) {
+      // Apply properties (simplified, no inheritance yet)
+      node->computed_style.color = rule.style.color;
+      if (rule.style.has_bg) {
+        node->computed_style.bg_color = rule.style.bg_color;
+        node->computed_style.has_bg = true;
+      }
+      if (rule.style.font_size != 12) {
+        node->computed_style.font_size = rule.style.font_size;
       }
     }
-  } else {
-    // Element
-    bool is_blk = node->is_block;
+  }
 
-    // Block start logic
-    if (is_blk) {
-      if (state.x != 0) {
-        state.x = 0;
-        state.y += 8;
-      }
-    }
-
-    // Children
-    for (auto &child : node->children) {
-      render_node(child, state);
-    }
-
-    // Block end logic
-    if (is_blk) {
-      if (state.x != 0) {
-        state.x = 0;
-        state.y += 8;
-      }
-    }
+  for (auto &child : node->children) {
+    apply_styles(child, rules);
   }
 }
 
@@ -364,6 +430,86 @@ void render_ui(uint32_t *buffer, int width, int height,
   draw_rect(buffer, width, height, 0, UI_HEIGHT - 1, width, 1, 0xFF000000);
 }
 
+// Layout state
+struct LayoutState {
+  int x;
+  int y;
+  int width;
+  int height;
+  uint32_t *buffer;
+};
+
+void render_node(std::shared_ptr<Node> node, LayoutState &state,
+                 Style parent_style = Style()) {
+  if (!node)
+    return;
+
+  Style current_style = parent_style;
+  if (!node->is_text) {
+    // Merge node style into current (simplified)
+    if (node->computed_style.color != 0xFF000000)
+      current_style.color = node->computed_style.color;
+    if (node->computed_style.has_bg) {
+      current_style.bg_color = node->computed_style.bg_color;
+      current_style.has_bg = true;
+    }
+    if (node->computed_style.font_size != 12)
+      current_style.font_size = node->computed_style.font_size;
+  }
+
+  if (node->is_text) {
+    // Render text
+    uint32_t color = current_style.color;
+    int scale = current_style.font_size / 7;
+    if (scale < 1)
+      scale = 1;
+    int char_w = 6 * scale;
+    int char_h = 8 * scale;
+
+    for (char c : node->text) {
+      draw_char(state.buffer, state.width, state.height, state.x, state.y, c,
+                color, scale);
+      state.x += char_w;
+      if (state.x + char_w >= state.width) {
+        state.x = 0;
+        state.y += char_h;
+      }
+    }
+  } else {
+    // Element
+    bool is_blk = node->is_block;
+
+    // Block start logic
+    if (is_blk) {
+      if (state.x != 0) {
+        state.x = 0;
+        state.y += (current_style.font_size / 7) * 8;
+      }
+      // Simple background rect for block elements
+      if (node->computed_style.has_bg) {
+        draw_rect(state.buffer, state.width, state.height, state.x, state.y,
+                  state.width, (current_style.font_size / 7) * 8 + 4,
+                  node->computed_style.bg_color);
+      }
+    }
+
+    // Children
+    for (auto &child : node->children) {
+      render_node(child, state, current_style);
+    }
+
+    // Block end logic
+    if (is_blk) {
+      if (state.x != 0) {
+        state.x = 0;
+        state.y += (current_style.font_size / 7) * 8;
+      }
+    }
+  }
+}
+
+// (Moved above render_node)
+
 extern "C" {
 void render_frame(const char *html_cstr, uint32_t *buffer, int width,
                   int height) {
@@ -375,7 +521,9 @@ void render_frame(const char *html_cstr, uint32_t *buffer, int width,
   // Render content first? Or UI first? Layers.
   // Let's parse content.
   std::string html(html_cstr);
-  auto root = parse_html(html);
+  std::vector<StyleRule> styles;
+  auto root = parse_html(html, styles);
+  apply_styles(root, styles);
 
   // Render Content
   LayoutState state;

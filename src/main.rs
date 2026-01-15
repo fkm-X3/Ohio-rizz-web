@@ -90,48 +90,74 @@ fn main() {
 
                 // 2. Render Modern GUI using tiny-skia on the top UI buffer area
                 let mut pixmap = Pixmap::new(size.width, scaled_ui_height).unwrap();
-                pixmap.fill(Color::from_rgba8(240, 240, 245, 255)); // Light bluish gray
-
+                
+                // Toolbar Background Gradient
                 let mut paint = Paint::default();
                 paint.anti_alias = true;
+                
+                let gradient = LinearGradient::new(
+                    Point::from_xy(0.0, 0.0),
+                    Point::from_xy(0.0, scaled_ui_height as f32),
+                    vec![
+                        GradientStop::new(0.0, Color::from_rgba8(45, 45, 50, 255)),
+                        GradientStop::new(1.0, Color::from_rgba8(30, 30, 35, 255)),
+                    ],
+                    SpreadMode::Pad,
+                    Transform::identity(),
+                ).unwrap();
+                paint.shader = gradient;
+                pixmap.fill_rect(Rect::from_xywh(0.0, 0.0, size.width as f32, scaled_ui_height as f32).unwrap(), &paint, Transform::identity(), None);
+                paint.shader = Shader::SolidColor(Color::BLACK); // Reset shader
 
-                // Toolbar shadow/border
+                // Toolbar bottom border (subtle shadow-like line)
                 let mut pb = PathBuilder::new();
                 pb.move_to(0.0, scaled_ui_height as f32 - 1.0);
                 pb.line_to(size.width as f32, scaled_ui_height as f32 - 1.0);
                 let path = pb.finish().unwrap();
-                paint.set_color_rgba8(200, 200, 210, 255);
+                paint.set_color_rgba8(20, 20, 25, 255);
                 pixmap.stroke_path(&path, &paint, &Stroke::default(), Transform::identity(), None);
 
                 // Buttons
-                let btn_y = 10.0 * scale_factor;
-                let btn_size = 35.0 * scale_factor;
+                let btn_y = 12.0 * scale_factor;
+                let btn_size = 36.0 * scale_factor;
                 let mut x = 15.0 * scale_factor;
                 let btn_spacing = 10.0 * scale_factor;
-                let font_size = 18.0 * scale_factor;
+                let font_size = 20.0 * scale_factor;
+                let corner_radius = 8.0 * scale_factor;
 
-                for label in &["<", ">", "R"] {
-                    let rect = Rect::from_xywh(x, btn_y, btn_size, btn_size).unwrap();
-                    let mut pb = PathBuilder::new();
-                    pb.push_rect(rect);
-                    let path = pb.finish().unwrap();
+                let labels = [("←", 10.0), ("→", 10.0), ("↻", 8.0)];
+                for (label, x_off) in labels {
+                    let _rect = Rect::from_xywh(x, btn_y, btn_size, btn_size).unwrap();
+                    let path = {
+                        let mut pb = PathBuilder::new();
+                        pb.move_to(x + corner_radius, btn_y);
+                        pb.line_to(x + btn_size - corner_radius, btn_y);
+                        pb.quad_to(x + btn_size, btn_y, x + btn_size, btn_y + corner_radius);
+                        pb.line_to(x + btn_size, btn_y + btn_size - corner_radius);
+                        pb.quad_to(x + btn_size, btn_y + btn_size, x + btn_size - corner_radius, btn_y + btn_size);
+                        pb.line_to(x + corner_radius, btn_y + btn_size);
+                        pb.quad_to(x, btn_y + btn_size, x, btn_y + btn_size - corner_radius);
+                        pb.line_to(x, btn_y + corner_radius);
+                        pb.quad_to(x, btn_y, x + corner_radius, btn_y);
+                        pb.finish().unwrap()
+                    };
                     
                     // Hover effect
                     if cursor_pos.0 >= x && cursor_pos.0 <= x + btn_size &&
                        cursor_pos.1 >= btn_y && cursor_pos.1 <= btn_y + btn_size {
-                        paint.set_color_rgba8(220, 220, 230, 255);
+                        paint.set_color_rgba8(70, 70, 80, 255);
                     } else {
-                        paint.set_color_rgba8(255, 255, 255, 255);
+                        paint.set_color_rgba8(55, 55, 65, 255);
                     }
                     
                     pixmap.fill_path(&path, &paint, FillRule::Winding, Transform::identity(), None);
                     
-                    // Border
-                    paint.set_color_rgba8(200, 200, 210, 255);
+                    // Subtle Border
+                    paint.set_color_rgba8(80, 80, 90, 255);
                     pixmap.stroke_path(&path, &paint, &Stroke::default(), Transform::identity(), None);
 
                     // Label
-                    draw_text(&mut pixmap, &font, label, x + 12.0 * scale_factor, btn_y + 25.0 * scale_factor, font_size, Color::BLACK);
+                    draw_text(&mut pixmap, &font, label, x + x_off * scale_factor, btn_y + 26.0 * scale_factor, font_size, Color::WHITE);
 
                     x += btn_size + btn_spacing;
                 }
@@ -139,17 +165,28 @@ fn main() {
                 // Address Bar
                 let addr_x = x;
                 let addr_w = size.width as f32 - x - 20.0 * scale_factor;
-                let addr_rect = Rect::from_xywh(addr_x, btn_y, addr_w, btn_size).unwrap();
-                paint.set_color_rgba8(255, 255, 255, 255);
-                pixmap.fill_rect(addr_rect, &paint, Transform::identity(), None);
+                let _addr_rect = Rect::from_xywh(addr_x, btn_y, addr_w, btn_size).unwrap();
+                let addr_path = {
+                    let mut pb = PathBuilder::new();
+                    pb.move_to(addr_x + corner_radius, btn_y);
+                    pb.line_to(addr_x + addr_w - corner_radius, btn_y);
+                    pb.quad_to(addr_x + addr_w, btn_y, addr_x + addr_w, btn_y + corner_radius);
+                    pb.line_to(addr_x + addr_w, btn_y + btn_size - corner_radius);
+                    pb.quad_to(addr_x + addr_w, btn_y + btn_size, addr_x + addr_w - corner_radius, btn_y + btn_size);
+                    pb.line_to(addr_x + corner_radius, btn_y + btn_size);
+                    pb.quad_to(addr_x, btn_y + btn_size, addr_x, btn_y + btn_size - corner_radius);
+                    pb.line_to(addr_x, btn_y + corner_radius);
+                    pb.quad_to(addr_x, btn_y, addr_x + corner_radius, btn_y);
+                    pb.finish().unwrap()
+                };
+
+                paint.set_color_rgba8(20, 20, 25, 255);
+                pixmap.fill_path(&addr_path, &paint, FillRule::Winding, Transform::identity(), None);
                 
-                paint.set_color_rgba8(180, 180, 190, 255);
-                let mut addr_path = PathBuilder::new();
-                addr_path.push_rect(addr_rect);
-                let addr_path = addr_path.finish().unwrap();
+                paint.set_color_rgba8(80, 80, 90, 255);
                 pixmap.stroke_path(&addr_path, &paint, &Stroke::default(), Transform::identity(), None);
 
-                draw_text(&mut pixmap, &font, &url, addr_x + 10.0 * scale_factor, btn_y + 25.0 * scale_factor, 16.0 * scale_factor, Color::from_rgba8(80, 80, 90, 255));
+                draw_text(&mut pixmap, &font, &url, addr_x + 15.0 * scale_factor, btn_y + 26.0 * scale_factor, 16.0 * scale_factor, Color::from_rgba8(180, 180, 190, 255));
 
                 // Copy Pixmap to softbuffer
                 let data = pixmap.data();

@@ -3,73 +3,118 @@
 
 <head>
     <style>
-        h1 {
-            font-size: 32px;
-            margin: 5px 20px 15px 20px;
-            padding: 10px;
-            background-color: gray;
-            border-width: 2px;
-            border-color: black;
-            color: white;
-            text-align: center;
+        body {
+            background-color: #121214;
+            color: #e1e1e6;
+            margin: 0;
+            padding: 0;
+            line-height: 1.5;
         }
 
-        div.container {
-            background-color: blue;
-            color: white;
+        .header {
+            background-color: #202024;
+            padding: 40px 20px;
+            text-align: center;
+            border-bottom: 2px;
+            border-color: #323238;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            font-size: 42px;
+            color: #00b37e;
+            margin: 0;
+        }
+
+        .subtitle {
+            font-size: 18px;
+            color: #8d8d99;
+            margin-top: 10px;
+        }
+
+        .container {
+            width: 700px;
+            margin: 0 162px 50px 162px;
+            padding: 30px;
+            background-color: #202024;
+            border-width: 1px;
+            border-color: #323238;
+        }
+
+        .card {
+            background-color: #29292e;
             padding: 20px;
-            margin: 10px 30px 30px 30px;
-            border-width: 5px;
-            border-color: black;
-            width: 500px;
+            margin-bottom: 20px;
+            border-left: 4px;
+            border-color: #00b37e;
+        }
+
+        h2 {
+            font-size: 24px;
+            color: #e1e1e6;
+            margin: 0 0 10px 0;
         }
 
         p {
-            background-color: green;
-            color: white;
-            padding: 10px;
-            margin-top: 20px;
-            border-width: 1px;
-            border-color: black;
+            margin: 0 0 15px 0;
+            color: #c4c4cc;
         }
 
-        .centered {
+        .footer {
             text-align: center;
-            background-color: white;
-            color: black;
-            padding: 10px;
+            color: #7c7c8a;
+            padding: 20px;
+            font-size: 14px;
         }
 
         strong {
-            color: yellow;
+            color: #00b37e;
         }
 
         em {
-            color: cyan;
+            color: #ffb86c;
         }
     </style>
 </head>
 
 <body>
-    <h1>v0.5 - "Inline Layout & Text"</h1>
+    <div class="header">
+        <h1>Rusty Browser</h1>
+        <div class="subtitle">Speed. Safety. Simplicity.</div>
+    </div>
 
     <div class="container">
-        <p class="centered">
-            <strong>Goal:</strong> Text becomes <em>hard</em> here.
-        </p>
-
-        <p style="line-height: 1.6;">
-            <strong>Word wrapping:</strong> This is a long paragraph designed to test the word-based layout engine. It
-            should wrap gracefully at the boundaries of the container without splitting words in half. If the engine
-            works correctly, you will see multiple lines of text here with increased line-height for better readability.
-            Even when nested deep inside other elements, the text should wrap back to the correct horizontal starting
-            point.
-        </p>
-
-
-        <div class="centered">
-            This text is <strong>Centered</strong> using <code>text-align: center</code>.
+        <div class="card">
+            <h2>Welcome to the Future</h2>
+            <p>
+                Experience a browser built from the ground up with <strong>Rust</strong> and <strong>C++</strong>.
+                Our custom rendering engine focuses on <em>performance</em> and <em>pixel-perfect</em> layout.
+            </p>
         </div>
+
+        <div class="card" style="border-color: #ffb86c;">
+            <h2>Engine v0.5 "Ignition"</h2>
+            <p>
+                Version 0.5 introduces advanced <strong>Inline Layout</strong> capabilities, allowing for
+                seamless text wrapping, complex alignment, and rich typography.
+            </p>
+        </div>
+
+        <div class="card" style="border-color: #8257e5;">
+            <h2>Modern Box Model</h2>
+            <p>
+                Complete support for <strong>padding</strong>, <strong>margins</strong>, and <strong>borders</strong>
+                ensures that every element is exactly where it should be.
+            </p>
+        </div>
+
+        <p style="text-align: center; margin-top: 40px;">
+            Thank you for exploring the <strong>Rusty-web</strong> project.
+        </p>
+    </div>
+
+    <div class="footer">
+        Powered by the custom Ignition Engine &bull; 2026
     </div>
 </body>
 

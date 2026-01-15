@@ -490,11 +490,13 @@ struct Node {
   bool is_text;
   bool is_block;
   Style computed_style;
+  std::weak_ptr<Node> parent; // Parent pointer for bubbling
 
-  // Attributes
+  // attributes
   std::string id;
   std::vector<std::string> classList;
   std::string inline_style;
+  std::string href; // Link URL
 
   // Layout results
   Rect margin_box;
@@ -556,6 +558,7 @@ std::shared_ptr<Node> parse_html(const std::string &html,
         auto text_node = std::make_shared<Node>();
         text_node->is_text = true;
         text_node->text = cleaned;
+        text_node->parent = stack.top();
         stack.top()->children.push_back(text_node);
       }
     }
@@ -627,9 +630,11 @@ std::shared_ptr<Node> parse_html(const std::string &html,
           }
         }
         node->inline_style = extract_attr("style");
+        node->href = extract_attr("href");
       }
 
       node->tag = tag_name;
+      node->parent = stack.top();
 
       if (tag_name == "style") {
         size_t style_end = html.find("</style>", gt);
@@ -647,7 +652,7 @@ std::shared_ptr<Node> parse_html(const std::string &html,
           tag_name == "body" || tag_name == "html") {
         node->is_block = true;
       } else {
-        node->is_block = false; // span, b, etc.
+        node->is_block = false; // span, b, a, etc.
       }
 
       stack.top()->children.push_back(node);
@@ -913,6 +918,10 @@ void apply_styles(std::shared_ptr<Node> node,
     node->computed_style.font_bold = true;
   } else if (node->tag == "em" || node->tag == "i") {
     node->computed_style.font_italic = true;
+  } else if (node->tag == "a") {
+    if (!(node->computed_style.set_fields & Style::F_COLOR)) {
+      node->computed_style.color = 0xFF0000EE; // Link blue
+    }
   }
 
   for (auto &child : node->children) {
@@ -1261,7 +1270,48 @@ void paint_node(std::shared_ptr<Node> node, const LayoutState &state,
   }
 }
 
+static std::shared_ptr<Node> global_root = nullptr;
+
+static std::shared_ptr<Node> find_node_at(std::shared_ptr<Node> node, int x,
+                                          int y) {
+  if (!node)
+    return nullptr;
+
+  // Check children first (top-most elements first)
+  for (auto it = node->children.rbegin(); it != node->children.rend(); ++it) {
+    auto hit = find_node_at(*it, x, y);
+    if (hit)
+      return hit;
+  }
+
+  // Check self
+  if (x >= node->border_box.x && x < node->border_box.x + node->border_box.w &&
+      y >= node->border_box.y && y < node->border_box.y + node->border_box.h) {
+    return node;
+  }
+
+  return nullptr;
+}
+
 extern "C" {
+bool hit_test(int x, int y, char *out_href, int max_len) {
+  if (!global_root)
+    return false;
+
+  auto node = find_node_at(global_root, x, y);
+  // Bubble up to find <a> tag if we hit a text node or nested span
+  while (node) {
+    if (node->tag == "a" && !node->href.empty()) {
+      strncpy(out_href, node->href.c_str(), max_len - 1);
+      out_href[max_len - 1] = '\0';
+      return true;
+    }
+    // Traverse up to parent
+    auto parent = node->parent.lock();
+    node = parent;
+  }
+  return false;
+}
 void render_frame(const char *html_cstr, uint32_t *buffer, int width,
                   int height, double scale_factor) {
   // Clear background
@@ -1271,13 +1321,13 @@ void render_frame(const char *html_cstr, uint32_t *buffer, int width,
 
   std::string html(html_cstr);
   std::vector<StyleRule> styles;
-  auto root = parse_html(html, styles);
-  apply_styles(root, styles, scale_factor, Style());
+  global_root = parse_html(html, styles);
+  apply_styles(global_root, styles, scale_factor, Style());
 
   // Layout phase
   int x = 0;
   int y = 0;
-  layout_node(root, width, 0, x, y, scale_factor);
+  layout_node(global_root, width, 0, x, y, scale_factor);
 
   // Paint phase
   LayoutState state;
@@ -1288,6 +1338,6 @@ void render_frame(const char *html_cstr, uint32_t *buffer, int width,
   state.buffer = buffer;
   state.scale_factor = scale_factor;
 
-  paint_node(root, state, 0xFFFFFFFF); // Start with white background
+  paint_node(global_root, state, 0xFFFFFFFF); // Start with white background
 }
 }

@@ -1,107 +1,204 @@
 #include <cctype>
 #include <cstdint>
 #include <cstring>
+#include <map>
 #include <memory>
 #include <stack>
+
 #include <string>
 #include <vector>
 
-static const uint8_t font5x7[][5] = {
-    {0x00, 0x00, 0x00, 0x00, 0x00}, // space
-    {0x04, 0x04, 0x04, 0x00, 0x04}, // !
-    {0x0A, 0x0A, 0x00, 0x00, 0x00}, // "
-    {0x0A, 0x1F, 0x0A, 0x1F, 0x0A}, // #
-    {0x0E, 0x15, 0x0E, 0x05, 0x0E}, // $
-    {0x18, 0x19, 0x02, 0x13, 0x03}, // %
-    {0x0C, 0x12, 0x0D, 0x12, 0x0D}, // &
-    {0x04, 0x04, 0x00, 0x00, 0x00}, // '
-    {0x02, 0x04, 0x08, 0x04, 0x02}, // (
-    {0x08, 0x04, 0x02, 0x04, 0x08}, // )
-    {0x00, 0x04, 0x15, 0x0E, 0x15}, // *
-    {0x04, 0x04, 0x1F, 0x04, 0x04}, // +
-    {0x00, 0x00, 0x00, 0x04, 0x08}, // ,
-    {0x00, 0x00, 0x1F, 0x00, 0x00}, // -
-    {0x00, 0x00, 0x00, 0x00, 0x04}, // .
-    {0x01, 0x02, 0x04, 0x08, 0x10}, // /
-    {0x0E, 0x11, 0x11, 0x11, 0x0E}, // 0
-    {0x04, 0x0C, 0x04, 0x04, 0x0E}, // 1
-    {0x0E, 0x11, 0x02, 0x04, 0x1F}, // 2
-    {0x1F, 0x02, 0x0E, 0x01, 0x1F}, // 3
-    {0x02, 0x06, 0x0A, 0x1F, 0x02}, // 4
-    {0x1F, 0x10, 0x1E, 0x01, 0x1E}, // 5
-    {0x06, 0x08, 0x1E, 0x11, 0x0E}, // 6
-    {0x1F, 0x01, 0x02, 0x04, 0x04}, // 7
-    {0x0E, 0x11, 0x0E, 0x11, 0x0E}, // 8
-    {0x0E, 0x11, 0x0F, 0x01, 0x0E}, // 9
-    {0x00, 0x04, 0x00, 0x04, 0x00}, // :
-    {0x00, 0x04, 0x00, 0x04, 0x08}, // ;
-    {0x02, 0x04, 0x08, 0x04, 0x02}, // <
-    {0x00, 0x1F, 0x00, 0x1F, 0x00}, // =
-    {0x08, 0x04, 0x02, 0x04, 0x08}, // >
-    {0x0E, 0x11, 0x02, 0x00, 0x04}, // ?
-    {0x0E, 0x11, 0x17, 0x15, 0x0E}, // @
-    {0x04, 0x0A, 0x11, 0x1F, 0x11}, // A
-    {0x1E, 0x11, 0x1E, 0x11, 0x1E}, // B
-    {0x0E, 0x11, 0x10, 0x11, 0x0E}, // C
-    {0x1C, 0x12, 0x12, 0x12, 0x1C}, // D
-    {0x1F, 0x10, 0x1E, 0x10, 0x1F}, // E
-    {0x1F, 0x10, 0x1E, 0x10, 0x10}, // F
-    {0x0E, 0x11, 0x10, 0x13, 0x0E}, // G
-    {0x11, 0x11, 0x1F, 0x11, 0x11}, // H
-    {0x0E, 0x04, 0x04, 0x04, 0x0E}, // I
-    {0x01, 0x01, 0x01, 0x11, 0x0E}, // J
-    {0x11, 0x12, 0x1C, 0x12, 0x11}, // K
-    {0x10, 0x10, 0x10, 0x10, 0x1F}, // L
-    {0x11, 0x1B, 0x15, 0x11, 0x11}, // M
-    {0x11, 0x19, 0x15, 0x13, 0x11}, // N
-    {0x0E, 0x11, 0x11, 0x11, 0x0E}, // O
-    {0x1E, 0x11, 0x1E, 0x10, 0x10}, // P
-    {0x0E, 0x11, 0x11, 0x12, 0x0D}, // Q
-    {0x1E, 0x11, 0x1E, 0x12, 0x11}, // R
-    {0x0F, 0x10, 0x0E, 0x01, 0x1E}, // S
-    {0x1F, 0x04, 0x04, 0x04, 0x04}, // T
-    {0x11, 0x11, 0x11, 0x11, 0x0E}, // U
-    {0x11, 0x11, 0x11, 0x0A, 0x04}, // V
-    {0x11, 0x11, 0x15, 0x15, 0x0A}, // W
-    {0x11, 0x0A, 0x04, 0x0A, 0x11}, // X
-    {0x11, 0x0A, 0x04, 0x04, 0x04}, // Y
-    {0x1F, 0x02, 0x04, 0x08, 0x1F}, // Z
-    {0x0E, 0x08, 0x08, 0x08, 0x0E}, // [
-    {0x10, 0x08, 0x04, 0x02, 0x01}, // \ backslash
-    {0x0E, 0x02, 0x02, 0x02, 0x0E}, // ]
-    {0x04, 0x0A, 0x11, 0x00, 0x00}, // ^
-    {0x00, 0x00, 0x00, 0x00, 0x1F}, // _
-    {0x04, 0x02, 0x00, 0x00, 0x00}, // `
-    {0x00, 0x0E, 0x11, 0x11, 0x0F}, // a
-    {0x10, 0x1C, 0x12, 0x12, 0x1C}, // b
-    {0x00, 0x0E, 0x10, 0x10, 0x0E}, // c
-    {0x01, 0x0E, 0x12, 0x12, 0x0F}, // d
-    {0x00, 0x0E, 0x1F, 0x10, 0x0E}, // e
-    {0x06, 0x09, 0x1C, 0x08, 0x08}, // f
-    {0x00, 0x0D, 0x13, 0x0D, 0x01}, // g
-    {0x10, 0x16, 0x19, 0x11, 0x11}, // h
-    {0x04, 0x00, 0x0C, 0x04, 0x0E}, // i
-    {0x02, 0x00, 0x06, 0x02, 0x0C}, // j
-    {0x10, 0x12, 0x14, 0x12, 0x11}, // k
-    {0x0C, 0x04, 0x04, 0x04, 0x0E}, // l
-    {0x00, 0x1A, 0x15, 0x15, 0x15}, // m
-    {0x00, 0x16, 0x19, 0x11, 0x11}, // n
-    {0x00, 0x0E, 0x11, 0x11, 0x0E}, // o
-    {0x00, 0x1C, 0x12, 0x1C, 0x10}, // p
-    {0x00, 0x0D, 0x12, 0x0F, 0x01}, // q
-    {0x00, 0x16, 0x19, 0x10, 0x10}, // r
-    {0x00, 0x0E, 0x10, 0x08, 0x1E}, // s
-    {0x08, 0x1C, 0x08, 0x08, 0x06}, // t
-    {0x00, 0x11, 0x11, 0x11, 0x0D}, // u
-    {0x00, 0x11, 0x11, 0x0A, 0x04}, // v
-    {0x00, 0x11, 0x15, 0x15, 0x0A}, // w
-    {0x00, 0x11, 0x0A, 0x0A, 0x11}, // x
-    {0x00, 0x11, 0x11, 0x0F, 0x01}, // y
-    {0x00, 0x1F, 0x04, 0x08, 0x1F}, // z
-    {0x02, 0x04, 0x04, 0x04, 0x02}, // {
-    {0x04, 0x04, 0x04, 0x04, 0x04}, // |
-    {0x08, 0x04, 0x04, 0x04, 0x08}, // }
-    {0x00, 0x00, 0x00, 0x00, 0x00}, // ~ (not impl)
+static const uint8_t font8x16[95][16] = {
+    {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // space
+    {0x00, 0x00, 0x18, 0x3C, 0x3C, 0x3C, 0x18, 0x18, 0x18, 0x00, 0x18, 0x18,
+     0x00, 0x00, 0x00, 0x00}, // !
+    {0x00, 0x66, 0x66, 0x66, 0x22, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // "
+    {0x00, 0x00, 0x00, 0x6C, 0x6C, 0xFE, 0x6C, 0x6C, 0xFE, 0x6C, 0x6C, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // #
+    {0x18, 0x18, 0x7C, 0xC6, 0xC2, 0x78, 0x06, 0x06, 0xC6, 0x7C, 0x18, 0x18,
+     0x00, 0x00, 0x00, 0x00}, // $
+    {0x00, 0x00, 0x00, 0x00, 0xC2, 0xC6, 0x0C, 0x18, 0x30, 0x60, 0xC6, 0x86,
+     0x00, 0x00, 0x00, 0x00}, // %
+    {0x00, 0x00, 0x38, 0x6C, 0x6C, 0x38, 0x76, 0xDC, 0xCC, 0xCC, 0x76, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // &
+    {0x00, 0x30, 0x30, 0x30, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // '
+    {0x00, 0x00, 0x0C, 0x18, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x18, 0x0C,
+     0x00, 0x00, 0x00, 0x00}, // (
+    {0x00, 0x00, 0x30, 0x18, 0x0C, 0x0C, 0x0C, 0x0C, 0x0C, 0x0C, 0x18, 0x30,
+     0x00, 0x00, 0x00, 0x00}, // )
+    {0x00, 0x00, 0x00, 0x00, 0x66, 0x3C, 0xFF, 0x3C, 0x66, 0x00, 0x00, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // *
+    {0x00, 0x00, 0x00, 0x18, 0x18, 0x18, 0x7E, 0x18, 0x18, 0x18, 0x00, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // +
+    {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x18, 0x18, 0x08,
+     0x10, 0x00, 0x00, 0x00}, // ,
+    {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFE, 0x00, 0x00, 0x00, 0x00, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // -
+    {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x18, 0x18, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // .
+    {0x00, 0x00, 0x00, 0x02, 0x06, 0x0C, 0x18, 0x30, 0x60, 0xC0, 0x80, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // /
+    {0x00, 0x00, 0x3C, 0x66, 0xC3, 0xC3, 0xC3, 0xC3, 0xC3, 0x66, 0x3C, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // 0
+    {0x00, 0x00, 0x18, 0x38, 0x78, 0x18, 0x18, 0x18, 0x18, 0x18, 0x7E, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // 1
+    {0x00, 0x00, 0x3C, 0x66, 0x06, 0x06, 0x0C, 0x18, 0x30, 0x60, 0x7E, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // 2
+    {0x00, 0x00, 0x3C, 0x66, 0x06, 0x1C, 0x06, 0x06, 0x06, 0x66, 0x3C, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // 3
+    {0x00, 0x00, 0x06, 0x0E, 0x1E, 0x36, 0x66, 0x66, 0x7F, 0x06, 0x06, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // 4
+    {0x00, 0x00, 0x7E, 0x60, 0x60, 0x7C, 0x06, 0x06, 0x06, 0x66, 0x3C, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // 5
+    {0x00, 0x00, 0x1C, 0x30, 0x60, 0x7C, 0x66, 0x66, 0x66, 0x66, 0x3C, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // 6
+    {0x00, 0x00, 0x7E, 0x06, 0x06, 0x0C, 0x18, 0x30, 0x30, 0x30, 0x30, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // 7
+    {0x00, 0x00, 0x3C, 0x66, 0x66, 0x3C, 0x66, 0x66, 0x66, 0x66, 0x3C, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // 8
+    {0x00, 0x00, 0x3C, 0x66, 0x66, 0x66, 0x3E, 0x06, 0x0C, 0x18, 0x70, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // 9
+    {0x00, 0x00, 0x00, 0x00, 0x18, 0x18, 0x00, 0x00, 0x18, 0x18, 0x00, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // :
+    {0x00, 0x00, 0x00, 0x00, 0x18, 0x18, 0x00, 0x00, 0x18, 0x18, 0x08, 0x10,
+     0x00, 0x00, 0x00, 0x00}, // ;
+    {0x00, 0x00, 0x0C, 0x18, 0x30, 0x60, 0x30, 0x18, 0x0C, 0x00, 0x00, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // <
+    {0x00, 0x00, 0x00, 0x00, 0x7E, 0x00, 0x00, 0x7E, 0x00, 0x00, 0x00, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // =
+    {0x00, 0x00, 0x30, 0x18, 0x0C, 0x06, 0x0C, 0x18, 0x30, 0x00, 0x00, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // >
+    {0x00, 0x00, 0x3C, 0x66, 0x06, 0x0C, 0x18, 0x18, 0x00, 0x18, 0x18, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // ?
+    {0x00, 0x00, 0x3C, 0x66, 0x66, 0x6E, 0x6E, 0x60, 0x62, 0x66, 0x3C, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // @
+    {0x00, 0x00, 0x18, 0x3C, 0x66, 0x66, 0x7E, 0x66, 0x66, 0x66, 0x66, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // A
+    {0x00, 0x00, 0x7C, 0x66, 0x66, 0x7C, 0x66, 0x66, 0x66, 0x66, 0x7C, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // B
+    {0x00, 0x00, 0x3C, 0x66, 0x60, 0x60, 0x60, 0x60, 0x60, 0x66, 0x3C, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // C
+    {0x00, 0x00, 0x78, 0x6C, 0x66, 0x66, 0x66, 0x66, 0x66, 0x6C, 0x78, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // D
+    {0x00, 0x00, 0x7E, 0x60, 0x60, 0x7C, 0x60, 0x60, 0x60, 0x60, 0x7E, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // E
+    {0x00, 0x00, 0x7E, 0x60, 0x60, 0x7C, 0x60, 0x60, 0x60, 0x60, 0x60, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // F
+    {0x00, 0x00, 0x3C, 0x66, 0x60, 0x60, 0x6E, 0x66, 0x66, 0x66, 0x3C, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // G
+    {0x00, 0x00, 0x66, 0x66, 0x66, 0x7E, 0x66, 0x66, 0x66, 0x66, 0x66, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // H
+    {0x00, 0x00, 0x3C, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x3C, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // I
+    {0x00, 0x00, 0x1E, 0x06, 0x06, 0x06, 0x06, 0x06, 0x06, 0x66, 0x3C, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // J
+    {0x00, 0x00, 0x66, 0x6C, 0x78, 0x70, 0x78, 0x6C, 0x66, 0x66, 0x66, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // K
+    {0x00, 0x00, 0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x60, 0x7E, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // L
+    {0x00, 0x00, 0x63, 0x63, 0x77, 0x7F, 0x6B, 0x63, 0x63, 0x63, 0x63, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // M
+    {0x00, 0x00, 0x66, 0x66, 0x76, 0x7E, 0x7E, 0x6E, 0x66, 0x66, 0x66, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // N
+    {0x00, 0x00, 0x3C, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x3C, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // O
+    {0x00, 0x00, 0x7C, 0x66, 0x66, 0x7C, 0x60, 0x60, 0x60, 0x60, 0x60, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // P
+    {0x00, 0x00, 0x3C, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x6E, 0x3C, 0x0E,
+     0x00, 0x00, 0x00, 0x00}, // Q
+    {0x00, 0x00, 0x7C, 0x66, 0x66, 0x7C, 0x78, 0x6C, 0x66, 0x66, 0x66, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // R
+    {0x00, 0x00, 0x3C, 0x66, 0x60, 0x3C, 0x06, 0x06, 0x06, 0x66, 0x3C, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // S
+    {0x00, 0x00, 0x7E, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // T
+    {0x00, 0x00, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x3C, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // U
+    {0x00, 0x00, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x3C, 0x18, 0x18, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // V
+    {0x00, 0x00, 0x63, 0x63, 0x63, 0x6B, 0x6B, 0x7F, 0x77, 0x63, 0x63, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // W
+    {0x00, 0x00, 0x66, 0x66, 0x3C, 0x18, 0x18, 0x18, 0x3C, 0x66, 0x66, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // X
+    {0x00, 0x00, 0x66, 0x66, 0x66, 0x3C, 0x18, 0x18, 0x18, 0x18, 0x18, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // Y
+    {0x00, 0x00, 0x7E, 0x06, 0x0C, 0x18, 0x30, 0x60, 0x40, 0x40, 0x7E, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // Z
+    {0x00, 0x00, 0x3C, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x3C, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // [
+    {0x00, 0x00, 0x00, 0x80, 0xC0, 0x60, 0x30, 0x18, 0x0C, 0x06, 0x02, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // \ backslash
+    {0x00, 0x00, 0x3C, 0x0C, 0x0C, 0x0C, 0x0C, 0x0C, 0x0C, 0x0C, 0x3C, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // ]
+    {0x00, 0x18, 0x3C, 0x66, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // ^
+    {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF,
+     0x00, 0x00, 0x00, 0x00}, // _
+    {0x00, 0x30, 0x18, 0x0C, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // `
+    {0x00, 0x00, 0x00, 0x00, 0x3C, 0x06, 0x3E, 0x66, 0x66, 0x66, 0x3E, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // a
+    {0x00, 0x00, 0x60, 0x60, 0x7C, 0x66, 0x66, 0x66, 0x66, 0x66, 0x7C, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // b
+    {0x00, 0x00, 0x00, 0x00, 0x3C, 0x66, 0x60, 0x60, 0x60, 0x66, 0x3C, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // c
+    {0x00, 0x00, 0x06, 0x06, 0x3E, 0x66, 0x66, 0x66, 0x66, 0x66, 0x3E, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // d
+    {0x00, 0x00, 0x00, 0x00, 0x3C, 0x66, 0x7E, 0x60, 0x60, 0x66, 0x3C, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // e
+    {0x00, 0x00, 0x1C, 0x30, 0x30, 0x7C, 0x30, 0x30, 0x30, 0x30, 0x30, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // f
+    {0x00, 0x00, 0x00, 0x00, 0x3E, 0x66, 0x66, 0x66, 0x3E, 0x06, 0x3C, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // g
+    {0x00, 0x00, 0x60, 0x60, 0x7C, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // h
+    {0x00, 0x00, 0x18, 0x18, 0x00, 0x18, 0x18, 0x18, 0x18, 0x18, 0x3C, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // i
+    {0x00, 0x00, 0x0C, 0x0C, 0x00, 0x0C, 0x0C, 0x0C, 0x0C, 0x0C, 0x3C, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // j
+    {0x00, 0x00, 0x60, 0x60, 0x66, 0x6C, 0x78, 0x70, 0x78, 0x6C, 0x66, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // k
+    {0x00, 0x00, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x1C, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // l
+    {0x00, 0x00, 0x00, 0x00, 0x66, 0x7F, 0x6B, 0x63, 0x63, 0x63, 0x63, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // m
+    {0x00, 0x00, 0x00, 0x00, 0x7C, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // n
+    {0x00, 0x00, 0x00, 0x00, 0x3C, 0x66, 0x66, 0x66, 0x66, 0x66, 0x3C, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // o
+    {0x00, 0x00, 0x00, 0x00, 0x7C, 0x66, 0x66, 0x7C, 0x60, 0x60, 0x60, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // p
+    {0x00, 0x00, 0x00, 0x00, 0x3E, 0x66, 0x66, 0x3E, 0x06, 0x06, 0x06, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // q
+    {0x00, 0x00, 0x00, 0x00, 0x7C, 0x66, 0x60, 0x60, 0x60, 0x60, 0x60, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // r
+    {0x00, 0x00, 0x00, 0x00, 0x3E, 0x60, 0x3C, 0x06, 0x3E, 0x00, 0x00, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // s
+    {0x00, 0x00, 0x30, 0x30, 0x7E, 0x30, 0x30, 0x30, 0x30, 0x30, 0x1C, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // t
+    {0x00, 0x00, 0x00, 0x00, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x3E, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // u
+    {0x00, 0x00, 0x00, 0x00, 0x66, 0x66, 0x66, 0x66, 0x3C, 0x18, 0x18, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // v
+    {0x00, 0x00, 0x00, 0x00, 0x63, 0x6B, 0x6B, 0x7F, 0x77, 0x63, 0x63, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // w
+    {0x00, 0x00, 0x00, 0x00, 0x66, 0x3C, 0x18, 0x18, 0x3C, 0x66, 0x66, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // x
+    {0x00, 0x00, 0x00, 0x00, 0x66, 0x66, 0x66, 0x3E, 0x06, 0x0C, 0x38, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // y
+    {0x00, 0x00, 0x00, 0x00, 0x7E, 0x0C, 0x18, 0x30, 0x60, 0x7E, 0x00, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // z
+    {0x00, 0x00, 0x0E, 0x18, 0x18, 0x70, 0x18, 0x18, 0x18, 0x18, 0x0E, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // {
+    {0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+     0x00, 0x00, 0x00, 0x00}, // |
+    {0x00, 0x00, 0x70, 0x18, 0x18, 0x0E, 0x18, 0x18, 0x18, 0x18, 0x70, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // }
+    {0x00, 0x76, 0xDC, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+     0x00, 0x00, 0x00, 0x00}, // ~
 };
 
 static void draw_pixel(uint32_t *buffer, int buf_w, int buf_h, int x, int y,
@@ -113,29 +210,54 @@ static void draw_pixel(uint32_t *buffer, int buf_w, int buf_h, int x, int y,
 
 static void draw_char(uint32_t *buffer, int buf_w, int buf_h, int x, int y,
                       char c, uint32_t color, double scale_factor,
-                      double font_size_scale = 1.0) {
+                      double font_size_scale = 1.0, bool bold = false,
+                      bool italic = false) {
   if (c < 32 || c > 126)
     return;
-  const uint8_t *glyph = font5x7[c - 32];
+  const uint8_t *glyph = font8x16[c - 32];
 
   double total_scale = scale_factor * font_size_scale;
-  if (total_scale < 1.0)
-    total_scale = 1.0;
+  if (total_scale < 0.1)
+    total_scale = 0.1;
 
-  for (int row = 0; row < 5; ++row) {
+  for (int row = 0; row < 16; ++row) {
     uint8_t bits = glyph[row];
-    for (int col = 0; col < 5; ++col) {
-      if ((bits >> (4 - col)) & 1) {
-        for (int sy = 0; sy < (int)total_scale; ++sy) {
-          for (int sx = 0; sx < (int)total_scale; ++sx) {
-            draw_pixel(buffer, buf_w, buf_h, x + (int)(col * total_scale) + sx,
-                       y + (int)(row * total_scale) + sy, color);
+    for (int col = 0; col < 8; ++col) {
+      if ((bits >> (7 - col)) & 1) {
+        // Skew for italics: move horizontal offset based on row
+        int italic_offset = italic ? (int)((15 - row) * total_scale * 0.2) : 0;
+
+        // Calculate destination rectangle for this glyph pixel
+        int x_start = x + (int)(col * total_scale) + italic_offset;
+        int y_start = y + (int)(row * total_scale);
+        int x_end = x + (int)((col + 1) * total_scale) + italic_offset;
+        int y_end = y + (int)((row + 1) * total_scale);
+
+        for (int py = y_start; py < y_end; ++py) {
+          for (int px = x_start; px < x_end; ++px) {
+            draw_pixel(buffer, buf_w, buf_h, px, py, color);
+          }
+        }
+
+        // Bold: Draw an extra column to the right
+        if (bold) {
+          int bold_extra = (int)std::max(1.0, total_scale / 2.0);
+          for (int py = y_start; py < y_end; ++py) {
+            for (int px = x_end; px < x_end + bold_extra; ++px) {
+              draw_pixel(buffer, buf_w, buf_h, px, py, color);
+            }
           }
         }
       }
     }
   }
 }
+
+// Rect structure for layout
+struct Rect {
+  int x, y, w, h;
+  Rect() : x(0), y(0), w(0), h(0) {}
+};
 
 // CSS Style structure
 struct Style {
@@ -144,8 +266,54 @@ struct Style {
   int font_size;
   bool has_bg;
 
+  // Box model properties
+  int margin_top, margin_right, margin_bottom, margin_left;
+  int padding_top, padding_right, padding_bottom, padding_left;
+  int border_top, border_right, border_bottom, border_left;
+  uint32_t border_color;
+  int width, height; // -1 means auto
+
+  // Text properties
+  bool font_bold;
+  bool font_italic;
+  std::string text_align; // "left", "center", "right"
+  double line_height;
+
+  // Bitmask for set properties
+  uint64_t set_fields;
+  enum Fields {
+    F_COLOR = 1 << 0,
+    F_BG_COLOR = 1 << 1,
+    F_FONT_SIZE = 1 << 2,
+    F_MARGIN_TOP = 1 << 3,
+    F_MARGIN_RIGHT = 1 << 4,
+    F_MARGIN_BOTTOM = 1 << 5,
+    F_MARGIN_LEFT = 1 << 6,
+    F_PADDING_TOP = 1 << 7,
+    F_PADDING_RIGHT = 1 << 8,
+    F_PADDING_BOTTOM = 1 << 9,
+    F_PADDING_LEFT = 1 << 10,
+    F_BORDER_TOP = 1 << 11,
+    F_BORDER_RIGHT = 1 << 12,
+    F_BORDER_BOTTOM = 1 << 13,
+    F_BORDER_LEFT = 1 << 14,
+    F_BORDER_COLOR = 1 << 15,
+    F_WIDTH = 1 << 16,
+    F_HEIGHT = 1 << 17,
+    F_FONT_BOLD = 1 << 18,
+    F_FONT_ITALIC = 1 << 19,
+    F_TEXT_ALIGN = 1 << 20,
+    F_LINE_HEIGHT = 1 << 21
+  };
+
   Style()
-      : color(0xFF000000), bg_color(0xFFFFFFFF), font_size(16), has_bg(false) {}
+      : color(0xFF000000), bg_color(0xFFFFFFFF), font_size(16), has_bg(false),
+        margin_top(0), margin_right(0), margin_bottom(0), margin_left(0),
+        padding_top(0), padding_right(0), padding_bottom(0), padding_left(0),
+        border_top(0), border_right(0), border_bottom(0), border_left(0),
+        border_color(0xFF000000), width(-1), height(-1), font_bold(false),
+        font_italic(false), text_align("left"), line_height(1.4),
+        set_fields(0) {}
 };
 
 struct StyleRule {
@@ -155,18 +323,41 @@ struct StyleRule {
 
 // Simple color map
 uint32_t parse_color(const std::string &val) {
-  if (val == "red")
+  std::string lower = val;
+  for (auto &c : lower)
+    c = std::tolower(c);
+
+  if (lower[0] == '#' && lower.length() == 7) {
+    try {
+      uint32_t r = std::stoul(lower.substr(1, 2), nullptr, 16);
+      uint32_t g = std::stoul(lower.substr(3, 2), nullptr, 16);
+      uint32_t b = std::stoul(lower.substr(5, 2), nullptr, 16);
+      return 0xFF000000 | (r << 16) | (g << 8) | b;
+    } catch (...) {
+      return 0xFF000000;
+    }
+  }
+
+  if (lower == "red")
     return 0xFFFF0000;
-  if (val == "green")
+  if (lower == "green")
     return 0xFF00FF00;
-  if (val == "blue")
+  if (lower == "blue")
     return 0xFF0000FF;
-  if (val == "black")
+  if (lower == "black")
     return 0xFF000000;
-  if (val == "white")
+  if (lower == "white")
     return 0xFFFFFFFF;
-  if (val == "gray")
+  if (lower == "gray" || lower == "grey")
     return 0xFF808080;
+  if (lower == "yellow")
+    return 0xFFFFFF00;
+  if (lower == "cyan")
+    return 0xFF00FFFF;
+  if (lower == "magenta")
+    return 0xFFFF00FF;
+  if (lower == "orange")
+    return 0xFFFFA500;
   // Fallback to black
   return 0xFF000000;
 }
@@ -219,13 +410,67 @@ std::vector<StyleRule> parse_css(const std::string &css) {
 
       if (prop == "color") {
         style.color = parse_color(val);
+        style.set_fields |= Style::F_COLOR;
       } else if (prop == "background-color") {
         style.bg_color = parse_color(val);
         style.has_bg = true;
+        style.set_fields |= Style::F_BG_COLOR;
       } else if (prop == "font-size") {
-        // Simple px parser
         if (val.find("px") != std::string::npos) {
           style.font_size = std::stoi(val.substr(0, val.find("px")));
+          style.set_fields |= Style::F_FONT_SIZE;
+        }
+      } else if (prop == "margin") {
+        if (val.find("px") != std::string::npos) {
+          int m = std::stoi(val.substr(0, val.find("px")));
+          style.margin_top = style.margin_right = style.margin_bottom =
+              style.margin_left = m;
+          style.set_fields |= Style::F_MARGIN_TOP | Style::F_MARGIN_RIGHT |
+                              Style::F_MARGIN_BOTTOM | Style::F_MARGIN_LEFT;
+        }
+      } else if (prop == "padding") {
+        if (val.find("px") != std::string::npos) {
+          int p = std::stoi(val.substr(0, val.find("px")));
+          style.padding_top = style.padding_right = style.padding_bottom =
+              style.padding_left = p;
+          style.set_fields |= Style::F_PADDING_TOP | Style::F_PADDING_RIGHT |
+                              Style::F_PADDING_BOTTOM | Style::F_PADDING_LEFT;
+        }
+      } else if (prop == "border-width") {
+        if (val.find("px") != std::string::npos) {
+          int b = std::stoi(val.substr(0, val.find("px")));
+          style.border_top = style.border_right = style.border_bottom =
+              style.border_left = b;
+          style.set_fields |= Style::F_BORDER_TOP | Style::F_BORDER_RIGHT |
+                              Style::F_BORDER_BOTTOM | Style::F_BORDER_LEFT;
+        }
+      } else if (prop == "border-color") {
+        style.border_color = parse_color(val);
+        style.set_fields |= Style::F_BORDER_COLOR;
+      } else if (prop == "width") {
+        if (val.find("px") != std::string::npos) {
+          style.width = std::stoi(val.substr(0, val.find("px")));
+          style.set_fields |= Style::F_WIDTH;
+        }
+      } else if (prop == "height") {
+        if (val.find("px") != std::string::npos) {
+          style.height = std::stoi(val.substr(0, val.find("px")));
+          style.set_fields |= Style::F_HEIGHT;
+        }
+      } else if (prop == "font-weight") {
+        style.font_bold = (val == "bold");
+        style.set_fields |= Style::F_FONT_BOLD;
+      } else if (prop == "font-style") {
+        style.font_italic = (val == "italic");
+        style.set_fields |= Style::F_FONT_ITALIC;
+      } else if (prop == "text-align") {
+        style.text_align = val;
+        style.set_fields |= Style::F_TEXT_ALIGN;
+      } else if (prop == "line-height") {
+        try {
+          style.line_height = std::stod(val);
+          style.set_fields |= Style::F_LINE_HEIGHT;
+        } catch (...) {
         }
       }
       prop_pos = semi + 1;
@@ -245,6 +490,27 @@ struct Node {
   bool is_text;
   bool is_block;
   Style computed_style;
+
+  // Attributes
+  std::string id;
+  std::vector<std::string> classList;
+  std::string inline_style;
+
+  // Layout results
+  Rect margin_box;
+  Rect border_box;
+  Rect padding_box;
+  Rect content_box;
+
+  // For text nodes: list of lines (x_offset, text_start, text_length)
+  struct LineInfo {
+    int x;
+    int y;
+    int width;
+    size_t start;
+    size_t length;
+  };
+  std::vector<LineInfo> text_lines;
 
   Node() : is_text(false), is_block(false) {}
 };
@@ -286,7 +552,7 @@ std::shared_ptr<Node> parse_html(const std::string &html,
       std::string text_part = html.substr(
           pos, (lt == std::string::npos) ? std::string::npos : lt - pos);
       std::string cleaned = clean_whitespace(text_part);
-      if (!cleaned.empty() && !(cleaned.size() == 1 && cleaned[0] == ' ')) {
+      if (!cleaned.empty()) {
         auto text_node = std::make_shared<Node>();
         text_node->is_text = true;
         text_node->text = cleaned;
@@ -302,7 +568,17 @@ std::shared_ptr<Node> parse_html(const std::string &html,
       break; // Error
 
     std::string tag_content = html.substr(lt + 1, gt - lt - 1);
-    bool is_closing = (!tag_content.empty() && tag_content[0] == '/');
+    if (tag_content.empty()) {
+      pos = gt + 1;
+      continue;
+    }
+
+    if (tag_content[0] == '!') { // Skip Doctypes/comments
+      pos = gt + 1;
+      continue;
+    }
+
+    bool is_closing = (tag_content[0] == '/');
 
     if (is_closing) {
       if (stack.size() > 1) { // Never pop root
@@ -310,11 +586,50 @@ std::shared_ptr<Node> parse_html(const std::string &html,
       }
     } else {
       // Opening tag
-      std::string tag_name = tag_content;
-      size_t space_pos = tag_name.find(' ');
-      if (space_pos != std::string::npos) {
-        tag_name = tag_name.substr(0, space_pos);
+      auto node = std::make_shared<Node>();
+
+      // Parse tag name and attributes
+      size_t space_pos = tag_content.find(' ');
+      std::string tag_name;
+      if (space_pos == std::string::npos) {
+        tag_name = tag_content;
+      } else {
+        tag_name = tag_content.substr(0, space_pos);
+        std::string attrs = tag_content.substr(space_pos + 1);
+
+        // Very basic attribute parsing
+        auto extract_attr = [&](const std::string &name) {
+          size_t start = attrs.find(name + "=\"");
+          if (start != std::string::npos) {
+            start += name.length() + 2;
+            size_t end = attrs.find('"', start);
+            if (end != std::string::npos) {
+              return attrs.substr(start, end - start);
+            }
+          }
+          return std::string("");
+        };
+
+        node->id = extract_attr("id");
+        std::string classes = extract_attr("class");
+        if (!classes.empty()) {
+          size_t c_pos = 0;
+          while (c_pos < classes.length()) {
+            size_t c_space = classes.find(' ', c_pos);
+            std::string c = (c_space == std::string::npos)
+                                ? classes.substr(c_pos)
+                                : classes.substr(c_pos, c_space - c_pos);
+            if (!c.empty())
+              node->classList.push_back(c);
+            if (c_space == std::string::npos)
+              break;
+            c_pos = c_space + 1;
+          }
+        }
+        node->inline_style = extract_attr("style");
       }
+
+      node->tag = tag_name;
 
       if (tag_name == "style") {
         size_t style_end = html.find("</style>", gt);
@@ -327,9 +642,6 @@ std::shared_ptr<Node> parse_html(const std::string &html,
         }
       }
 
-      auto node = std::make_shared<Node>();
-      node->tag = tag_name;
-
       // Determine display type
       if (tag_name == "div" || tag_name == "h1" || tag_name == "p" ||
           tag_name == "body" || tag_name == "html") {
@@ -339,42 +651,272 @@ std::shared_ptr<Node> parse_html(const std::string &html,
       }
 
       stack.top()->children.push_back(node);
-      stack.push(node);
+
+      // Self-closing tags list
+      if (tag_name != "img" && tag_name != "br" && tag_name != "hr" &&
+          tag_name != "meta" && tag_name != "link") {
+        stack.push(node);
+      }
     }
     pos = gt + 1;
   }
   return root;
 }
 
+// Helper to parse custom body-like CSS strings into a Style object
+void parse_inline_style(const std::string &body, Style &style, double scale) {
+  size_t prop_pos = 0;
+  while (prop_pos < body.length()) {
+    size_t colon = body.find(':', prop_pos);
+    if (colon == std::string::npos)
+      break;
+    size_t semi = body.find(';', colon);
+    if (semi == std::string::npos)
+      semi = body.length();
+
+    std::string prop = body.substr(prop_pos, colon - prop_pos);
+    std::string val = body.substr(colon + 1, semi - colon - 1);
+
+    auto trim = [](std::string &s) {
+      size_t f = s.find_first_not_of(" \n\r\t");
+      size_t l = s.find_last_not_of(" \n\r\t");
+      if (f != std::string::npos)
+        s = s.substr(f, (l - f + 1));
+      else
+        s = "";
+    };
+    trim(prop);
+    trim(val);
+
+    auto get_scaled_px = [&](const std::string &v) {
+      if (v.find("px") != std::string::npos) {
+        return (int)(std::stoi(v.substr(0, v.find("px"))) * scale);
+      }
+      return -1;
+    };
+
+    if (prop == "color") {
+      style.color = parse_color(val);
+      style.set_fields |= Style::F_COLOR;
+    } else if (prop == "background-color") {
+      style.bg_color = parse_color(val);
+      style.has_bg = true;
+      style.set_fields |= Style::F_BG_COLOR;
+    } else if (prop == "font-size") {
+      int s = get_scaled_px(val);
+      if (s != -1) {
+        style.font_size = s;
+        style.set_fields |= Style::F_FONT_SIZE;
+      }
+    } else if (prop == "margin") {
+      int m = get_scaled_px(val);
+      if (m != -1) {
+        style.margin_top = style.margin_right = style.margin_bottom =
+            style.margin_left = m;
+        style.set_fields |= Style::F_MARGIN_TOP | Style::F_MARGIN_RIGHT |
+                            Style::F_MARGIN_BOTTOM | Style::F_MARGIN_LEFT;
+      }
+    } else if (prop == "margin-top") {
+      int m = get_scaled_px(val);
+      if (m != -1) {
+        style.margin_top = m;
+        style.set_fields |= Style::F_MARGIN_TOP;
+      }
+    } else if (prop == "padding") {
+      int p = get_scaled_px(val);
+      if (p != -1) {
+        style.padding_top = style.padding_right = style.padding_bottom =
+            style.padding_left = p;
+        style.set_fields |= Style::F_PADDING_TOP | Style::F_PADDING_RIGHT |
+                            Style::F_PADDING_BOTTOM | Style::F_PADDING_LEFT;
+      }
+    } else if (prop == "border-width") {
+      int b = get_scaled_px(val);
+      if (b != -1) {
+        style.border_top = style.border_right = style.border_bottom =
+            style.border_left = b;
+        style.set_fields |= Style::F_BORDER_TOP | Style::F_BORDER_RIGHT |
+                            Style::F_BORDER_BOTTOM | Style::F_BORDER_LEFT;
+      }
+    } else if (prop == "border-color") {
+      style.border_color = parse_color(val);
+      style.set_fields |= Style::F_BORDER_COLOR;
+    } else if (prop == "width") {
+      int w = get_scaled_px(val);
+      if (w != -1) {
+        style.width = w;
+        style.set_fields |= Style::F_WIDTH;
+      }
+    } else if (prop == "height") {
+      int h = get_scaled_px(val);
+      if (h != -1) {
+        style.height = h;
+        style.set_fields |= Style::F_HEIGHT;
+      }
+    } else if (prop == "font-weight") {
+      style.font_bold = (val == "bold");
+      style.set_fields |= Style::F_FONT_BOLD;
+    } else if (prop == "font-style") {
+      style.font_italic = (val == "italic");
+      style.set_fields |= Style::F_FONT_ITALIC;
+    } else if (prop == "text-align") {
+      style.text_align = val;
+      style.set_fields |= Style::F_TEXT_ALIGN;
+    } else if (prop == "line-height") {
+      try {
+        style.line_height = std::stod(val);
+        style.set_fields |= Style::F_LINE_HEIGHT;
+      } catch (...) {
+      }
+    }
+    prop_pos = semi + 1;
+  }
+}
+
 void apply_styles(std::shared_ptr<Node> node,
-                  const std::vector<StyleRule> &rules) {
+                  const std::vector<StyleRule> &rules, double scale,
+                  Style parent_style) {
   if (!node || node->is_text)
     return;
 
-  // Simple selector match
+  // Inherit some properties
+  node->computed_style.color = parent_style.color;
+  node->computed_style.text_align = parent_style.text_align;
+  node->computed_style.line_height = parent_style.line_height;
+  node->computed_style.font_size = parent_style.font_size;
+  node->computed_style.font_bold = parent_style.font_bold;
+  node->computed_style.font_italic = parent_style.font_italic;
+
+  // Precedence: Tag < Class < ID < Inline
+  auto apply_rule = [&](const Style &rule_style) {
+    auto scale_val = [&](int v) {
+      return (v == -1 || v == 0) ? v : (int)(v * scale);
+    };
+
+    if (rule_style.set_fields & Style::F_COLOR)
+      node->computed_style.color = rule_style.color;
+    if (rule_style.set_fields & Style::F_BG_COLOR) {
+      node->computed_style.bg_color = rule_style.bg_color;
+      node->computed_style.has_bg = true;
+    }
+
+    if (rule_style.set_fields & Style::F_FONT_SIZE)
+      node->computed_style.font_size = (int)(rule_style.font_size * scale);
+
+    if (rule_style.set_fields & Style::F_MARGIN_TOP)
+      node->computed_style.margin_top = scale_val(rule_style.margin_top);
+    if (rule_style.set_fields & Style::F_MARGIN_RIGHT)
+      node->computed_style.margin_right = scale_val(rule_style.margin_right);
+    if (rule_style.set_fields & Style::F_MARGIN_BOTTOM)
+      node->computed_style.margin_bottom = scale_val(rule_style.margin_bottom);
+    if (rule_style.set_fields & Style::F_MARGIN_LEFT)
+      node->computed_style.margin_left = scale_val(rule_style.margin_left);
+
+    if (rule_style.set_fields & Style::F_PADDING_TOP)
+      node->computed_style.padding_top = scale_val(rule_style.padding_top);
+    if (rule_style.set_fields & Style::F_PADDING_RIGHT)
+      node->computed_style.padding_right = scale_val(rule_style.padding_right);
+    if (rule_style.set_fields & Style::F_PADDING_BOTTOM)
+      node->computed_style.padding_bottom =
+          scale_val(rule_style.padding_bottom);
+    if (rule_style.set_fields & Style::F_PADDING_LEFT)
+      node->computed_style.padding_left = scale_val(rule_style.padding_left);
+
+    if (rule_style.set_fields & Style::F_BORDER_TOP)
+      node->computed_style.border_top = scale_val(rule_style.border_top);
+    if (rule_style.set_fields & Style::F_BORDER_RIGHT)
+      node->computed_style.border_right = scale_val(rule_style.border_right);
+    if (rule_style.set_fields & Style::F_BORDER_BOTTOM)
+      node->computed_style.border_bottom = scale_val(rule_style.border_bottom);
+    if (rule_style.set_fields & Style::F_BORDER_LEFT)
+      node->computed_style.border_left = scale_val(rule_style.border_left);
+    if (rule_style.set_fields & Style::F_BORDER_COLOR)
+      node->computed_style.border_color = rule_style.border_color;
+
+    if (rule_style.set_fields & Style::F_WIDTH)
+      node->computed_style.width = scale_val(rule_style.width);
+    if (rule_style.set_fields & Style::F_HEIGHT)
+      node->computed_style.height = scale_val(rule_style.height);
+
+    if (rule_style.set_fields & Style::F_FONT_BOLD)
+      node->computed_style.font_bold = rule_style.font_bold;
+    if (rule_style.set_fields & Style::F_FONT_ITALIC)
+      node->computed_style.font_italic = rule_style.font_italic;
+    if (rule_style.set_fields & Style::F_TEXT_ALIGN)
+      node->computed_style.text_align = rule_style.text_align;
+    if (rule_style.set_fields & Style::F_LINE_HEIGHT)
+      node->computed_style.line_height = rule_style.line_height;
+  };
+
+  // 1. Tag matches
   for (const auto &rule : rules) {
     if (rule.selector == node->tag) {
-      // Apply properties (simplified, no inheritance yet)
-      node->computed_style.color = rule.style.color;
-      if (rule.style.has_bg) {
-        node->computed_style.bg_color = rule.style.bg_color;
-        node->computed_style.has_bg = true;
+      apply_rule(rule.style);
+    }
+  }
+
+  // 2. Class matches
+  for (const auto &rule : rules) {
+    if (!rule.selector.empty() && rule.selector[0] == '.') {
+      std::string target_class = rule.selector.substr(1);
+      for (const auto &c : node->classList) {
+        if (c == target_class) {
+          apply_rule(rule.style);
+          break;
+        }
       }
-      if (rule.style.font_size != 16) {
-        node->computed_style.font_size = rule.style.font_size;
+    }
+    // Also handle tag.class
+    size_t dot_pos = rule.selector.find('.');
+    if (dot_pos != std::string::npos && dot_pos > 0) {
+      std::string tag = rule.selector.substr(0, dot_pos);
+      std::string cls = rule.selector.substr(dot_pos + 1);
+      if (tag == node->tag) {
+        for (const auto &c : node->classList) {
+          if (c == cls) {
+            apply_rule(rule.style);
+            break;
+          }
+        }
       }
     }
   }
 
+  // 3. ID matches
+  for (const auto &rule : rules) {
+    if (!rule.selector.empty() && rule.selector[0] == '#') {
+      if (node->id == rule.selector.substr(1)) {
+        apply_rule(rule.style);
+      }
+    }
+  }
+
+  // 4. Inline styles (pass scale here)
+  if (!node->inline_style.empty()) {
+    parse_inline_style(node->inline_style, node->computed_style, scale);
+  }
+
   // Default styles if not overridden
-  if (node->tag == "h1" && node->computed_style.font_size == 16) {
-    node->computed_style.font_size = 32;
-  } else if (node->tag == "h2" && node->computed_style.font_size == 16) {
-    node->computed_style.font_size = 24;
+  if (node->tag == "h1") {
+    // Already scaled font_size if it was set by rules, but let's ensure
+    // defaults are scaled.
+    if (node->computed_style.font_size == (int)(16 * scale) ||
+        node->computed_style.font_size == 16)
+      node->computed_style.font_size = (int)(32 * scale);
+    node->computed_style.font_bold = true;
+  } else if (node->tag == "h2") {
+    if (node->computed_style.font_size == (int)(16 * scale) ||
+        node->computed_style.font_size == 16)
+      node->computed_style.font_size = (int)(24 * scale);
+    node->computed_style.font_bold = true;
+  } else if (node->tag == "strong" || node->tag == "b") {
+    node->computed_style.font_bold = true;
+  } else if (node->tag == "em" || node->tag == "i") {
+    node->computed_style.font_italic = true;
   }
 
   for (auto &child : node->children) {
-    apply_styles(child, rules);
+    apply_styles(child, rules, scale, node->computed_style);
   }
 }
 
@@ -383,6 +925,20 @@ void draw_rect(uint32_t *buffer, int buf_w, int buf_h, int x, int y, int w,
   for (int j = 0; j < h; ++j) {
     for (int i = 0; i < w; ++i) {
       draw_pixel(buffer, buf_w, buf_h, x + i, y + j, color);
+    }
+  }
+}
+
+static void collect_lines_recursive(std::shared_ptr<Node> node,
+                                    std::vector<Node::LineInfo *> &lines) {
+
+  if (node->is_text) {
+    for (auto &line : node->text_lines) {
+      lines.push_back(&line);
+    }
+  } else if (!node->is_block) {
+    for (auto &child : node->children) {
+      collect_lines_recursive(child, lines);
     }
   }
 }
@@ -397,79 +953,311 @@ struct LayoutState {
   double scale_factor;
 };
 
-void render_node(std::shared_ptr<Node> node, LayoutState &state,
+void layout_node(std::shared_ptr<Node> node, int container_w, int line_start_x,
+                 int &x, int &y, double scale_factor,
                  Style parent_style = Style()) {
+
   if (!node)
     return;
 
   Style current_style = parent_style;
   if (!node->is_text) {
-    // Merge node style into current (simplified)
+    // Basic inheritance
     if (node->computed_style.color != 0xFF000000)
       current_style.color = node->computed_style.color;
-    if (node->computed_style.has_bg) {
-      current_style.bg_color = node->computed_style.bg_color;
-      current_style.has_bg = true;
-    }
-    if (node->computed_style.font_size != 12)
+    if (node->computed_style.font_size != 16)
       current_style.font_size = node->computed_style.font_size;
+    if (node->computed_style.font_bold)
+      current_style.font_bold = true;
+    if (node->computed_style.font_italic)
+      current_style.font_italic = true;
+    if (node->computed_style.text_align != "left")
+      current_style.text_align = node->computed_style.text_align;
+    if (node->computed_style.line_height != 1.4)
+      current_style.line_height = node->computed_style.line_height;
+
+    // Save computed
+    Style s = node->computed_style;
+    if (!(node->computed_style.set_fields & Style::F_COLOR))
+      s.color = current_style.color;
+    if (!(node->computed_style.set_fields & Style::F_FONT_SIZE))
+      s.font_size = current_style.font_size;
+    s.font_bold = current_style.font_bold;
+    s.font_italic = current_style.font_italic;
+    s.text_align = current_style.text_align;
+    s.line_height = current_style.line_height;
+    node->computed_style = s;
+  } else {
+    node->computed_style = parent_style;
   }
 
   if (node->is_text) {
-    // Render text
-    uint32_t color = current_style.color;
-
-    // font_size is in CSS pixels.
-    // Our base glyph is 5x7. Let's say a 16px font-size means the glyph height
-    // should be ~16px. So scale for the glyph is font_size / 7.0.
-    double font_scale = (double)current_style.font_size / 7.0;
-    double total_scale = state.scale_factor * font_scale;
-
-    int char_w = (int)(6.0 * total_scale);
-    int char_h = (int)(9.0 * total_scale); // 7 + 2 for spacing
-
-    for (char c : node->text) {
-      draw_char(state.buffer, state.width, state.height, state.x, state.y, c,
-                color, state.scale_factor, font_scale);
-      state.x += char_w;
-      if (state.x + char_w >= state.width) {
-        state.x = 0;
-        state.y += char_h;
-      }
+    double font_scale =
+        (double)node->computed_style.font_size / (16.0 * scale_factor);
+    double total_scale = scale_factor * font_scale;
+    int char_w = (int)(8.0 * total_scale);
+    if (node->computed_style.font_bold) {
+      char_w += (int)std::max(1.0, total_scale / 2.0);
     }
+    int char_h = (int)(node->computed_style.line_height * 16.0 * total_scale);
+
+    node->text_lines.clear();
+    node->margin_box.x = x;
+    node->margin_box.y = y;
+    int start_y = y;
+
+    std::string text = node->text;
+    size_t line_start = 0;
+    int current_line_x = x;
+    int first_line_start_x = x;
+
+    size_t i = 0;
+    while (i < text.length()) {
+      // Skip leading spaces ONLY at the actual start of a wrap line
+      if (current_line_x == line_start_x && line_start == i) {
+        while (i < text.length() && std::isspace(text[i])) {
+          i++;
+          line_start++;
+        }
+        if (i >= text.length())
+          break;
+      }
+
+      size_t word_end = i;
+      while (word_end < text.length() && !std::isspace(text[word_end]))
+        word_end++;
+
+      // Includes spaces after word for width calculation, but we won't wrap on
+      // them
+      size_t segment_end = word_end;
+      while (segment_end < text.length() && std::isspace(text[segment_end]))
+        segment_end++;
+
+      int seg_w = (int)((segment_end - i) * char_w);
+
+      if (current_line_x + seg_w > container_w &&
+          current_line_x > line_start_x) {
+        // Wrap: finish previous line
+        node->text_lines.push_back(
+            {line_start == 0 ? first_line_start_x : line_start_x, y,
+             current_line_x -
+                 (line_start == 0 ? first_line_start_x : line_start_x),
+             line_start, i - line_start});
+
+        y += char_h;
+        current_line_x = line_start_x;
+        line_start = i;
+      }
+
+      current_line_x += seg_w;
+      i = segment_end;
+    }
+    // Last line
+    if (line_start < text.length()) {
+      node->text_lines.push_back(
+          {line_start == 0 ? first_line_start_x : line_start_x, y,
+           current_line_x -
+               (line_start == 0 ? first_line_start_x : line_start_x),
+           line_start, text.length() - line_start});
+      x = current_line_x;
+    }
+
+    node->margin_box.w =
+        (y == start_y) ? (x - node->margin_box.x) : container_w;
+    node->margin_box.h = (y - start_y) + char_h;
+    node->border_box = node->padding_box = node->content_box = node->margin_box;
   } else {
-    // Element
-    bool is_blk = node->is_block;
+    Style &s = node->computed_style;
 
-    double font_scale = (double)current_style.font_size / 7.0;
-    int line_height =
-        (int)(state.scale_factor * font_scale * 10.0); // 1.4ish line height
-
-    // Block start logic
-    if (is_blk) {
-      if (state.x != 0) {
-        state.x = 0;
-        state.y += line_height;
-      }
-      // Simple background rect for block elements
-      if (node->computed_style.has_bg) {
-        draw_rect(state.buffer, state.width, state.height, state.x, state.y,
-                  state.width, line_height, node->computed_style.bg_color);
-      }
+    if (node->is_block && x != line_start_x) {
+      x = line_start_x;
+      double font_scale = (double)current_style.font_size / 16.0;
+      y += (int)(scale_factor * font_scale * 16.0 *
+                 node->computed_style.line_height);
     }
 
-    // Children
+    int box_start_y = y;
+    node->margin_box.x = x;
+    node->margin_box.y = y;
+
+    node->border_box.x = x + s.margin_left;
+    node->border_box.y = y + s.margin_top;
+    node->padding_box.x = node->border_box.x + s.border_left;
+    node->padding_box.y = node->border_box.y + s.border_top;
+    node->content_box.x = node->padding_box.x + s.padding_left;
+    node->content_box.y = node->padding_box.y + s.padding_top;
+
+    int available_w = container_w - x;
+    int cur_inner_w;
+    if (s.width != -1) {
+      node->content_box.w = s.width;
+      cur_inner_w = s.width - s.padding_left - s.padding_right - s.border_left -
+                    s.border_right;
+    } else {
+      cur_inner_w = available_w - s.margin_left - s.margin_right -
+                    s.border_left - s.border_right - s.padding_left -
+                    s.padding_right;
+      if (node->is_block)
+        node->content_box.w = cur_inner_w;
+      else
+        node->content_box.w = 0;
+    }
+
+    int child_x = node->content_box.x;
+    int child_y = node->content_box.y;
+    int content_max_x = node->content_box.x;
+
+    int child_container_w = node->content_box.x + cur_inner_w;
+    int child_line_start_x =
+        node->is_block ? node->content_box.x : line_start_x;
+
     for (auto &child : node->children) {
-      render_node(child, state, current_style);
+      int prev_x = child_x;
+      int prev_y = child_y;
+      layout_node(child, child_container_w, child_line_start_x, child_x,
+                  child_y, scale_factor, node->computed_style);
+
+      if (child_x > content_max_x)
+        content_max_x = child_x;
     }
 
-    // Block end logic
-    if (is_blk) {
-      if (state.x != 0 || !node->children.empty()) {
-        state.x = 0;
-        state.y += line_height;
+    if (s.width == -1 && !node->is_block)
+      node->content_box.w = content_max_x - node->content_box.x;
+
+    if (s.height != -1) {
+      node->content_box.h = s.height;
+    } else {
+      double font_scale = (double)node->computed_style.font_size / 16.0;
+      int line_h = (int)(scale_factor * font_scale * 16.0 *
+                         node->computed_style.line_height);
+      node->content_box.h =
+          (child_y == node->content_box.y && node->children.empty())
+              ? 0
+              : (child_y - node->content_box.y + line_h);
+    }
+
+    // Align lines if it's a block
+    if (node->is_block && s.text_align == "center") {
+      std::vector<Node::LineInfo *> flow_lines;
+      for (auto &child : node->children) {
+        collect_lines_recursive(child, flow_lines);
+      }
+
+      if (!flow_lines.empty()) {
+        // Group lines by Y coordinate
+        std::map<int, std::vector<Node::LineInfo *>> lines_by_y;
+        for (auto *line : flow_lines) {
+          lines_by_y[line->y].push_back(line);
+        }
+
+        for (auto &pair : lines_by_y) {
+          auto &y_lines = pair.second;
+          int min_lx = 1000000;
+          int max_rx = -1000000;
+          for (auto *line : y_lines) {
+            if (line->x < min_lx)
+              min_lx = line->x;
+            if (line->x + line->width > max_rx)
+              max_rx = line->x + line->width;
+          }
+
+          int total_w = max_rx - min_lx;
+          int available_w = node->content_box.w;
+          if (total_w < available_w) {
+            // How much to shift this group of lines?
+            // Target center of content_box is node->content_box.x +
+            // available_w/2 Current center is (min_lx + max_rx)/2
+            int shift =
+                (node->content_box.x + available_w / 2) - (min_lx + max_rx) / 2;
+            for (auto *line : y_lines) {
+              line->x += shift;
+            }
+          }
+        }
       }
     }
+
+    node->padding_box.w =
+        node->content_box.w + s.padding_left + s.padding_right;
+    node->padding_box.h =
+        node->content_box.h + s.padding_top + s.padding_bottom;
+    node->border_box.w = node->padding_box.w + s.border_left + s.border_right;
+    node->border_box.h = node->padding_box.h + s.border_top + s.border_bottom;
+    node->margin_box.w = node->border_box.w + s.margin_left + s.margin_right;
+    node->margin_box.h = node->border_box.h + s.margin_top + s.margin_bottom;
+    if (node->is_block) {
+      x = line_start_x;
+      y = node->margin_box.y + node->margin_box.h;
+    } else {
+      x = child_x;
+      y = child_y;
+    }
+  }
+}
+
+void paint_node(std::shared_ptr<Node> node, const LayoutState &state,
+                uint32_t current_bg_color) {
+  if (!node)
+    return;
+
+  if (!node->is_text) {
+    Style &s = node->computed_style;
+
+    if (s.has_bg) {
+      draw_rect(state.buffer, state.width, state.height, node->padding_box.x,
+                node->padding_box.y, node->padding_box.w, node->padding_box.h,
+                s.bg_color);
+      current_bg_color = s.bg_color;
+    }
+
+    if (s.border_top > 0)
+      draw_rect(state.buffer, state.width, state.height, node->border_box.x,
+                node->border_box.y, node->border_box.w, s.border_top,
+                s.border_color);
+    if (s.border_bottom > 0)
+      draw_rect(state.buffer, state.width, state.height, node->border_box.x,
+                node->border_box.y + node->border_box.h - s.border_bottom,
+                node->border_box.w, s.border_bottom, s.border_color);
+    if (s.border_left > 0)
+      draw_rect(state.buffer, state.width, state.height, node->border_box.x,
+                node->border_box.y, s.border_left, node->border_box.h,
+                s.border_color);
+    if (s.border_right > 0)
+      draw_rect(state.buffer, state.width, state.height,
+                node->border_box.x + node->border_box.w - s.border_right,
+                node->border_box.y, s.border_right, node->border_box.h,
+                s.border_color);
+  } else {
+    double font_scale =
+        (double)node->computed_style.font_size / (16.0 * state.scale_factor);
+    double total_scale = state.scale_factor * font_scale;
+    int char_w = (int)(8.0 * total_scale);
+    if (node->computed_style.font_bold) {
+      char_w += (int)std::max(1.0, total_scale / 2.0);
+    }
+
+    for (const auto &line : node->text_lines) {
+      int cur_x = line.x;
+      std::string line_text = node->text.substr(line.start, line.length);
+
+      uint32_t text_color = node->computed_style.color;
+      // Auto-invert if same as background
+      if ((text_color & 0x00FFFFFF) == (current_bg_color & 0x00FFFFFF)) {
+        text_color ^= 0x00FFFFFF;
+      }
+
+      for (char c : line_text) {
+        draw_char(state.buffer, state.width, state.height, cur_x, line.y, c,
+                  text_color, state.scale_factor, font_scale,
+                  node->computed_style.font_bold,
+                  node->computed_style.font_italic);
+        cur_x += char_w;
+      }
+    }
+  }
+
+  for (auto &child : node->children) {
+    paint_node(child, state, current_bg_color);
   }
 }
 
@@ -484,17 +1272,22 @@ void render_frame(const char *html_cstr, uint32_t *buffer, int width,
   std::string html(html_cstr);
   std::vector<StyleRule> styles;
   auto root = parse_html(html, styles);
-  apply_styles(root, styles);
+  apply_styles(root, styles, scale_factor, Style());
 
-  // Render Content
+  // Layout phase
+  int x = 0;
+  int y = 0;
+  layout_node(root, width, 0, x, y, scale_factor);
+
+  // Paint phase
   LayoutState state;
   state.x = 0;
-  state.y = 0; // Start at top
+  state.y = 0;
   state.width = width;
   state.height = height;
   state.buffer = buffer;
   state.scale_factor = scale_factor;
 
-  render_node(root, state);
+  paint_node(root, state, 0xFFFFFFFF); // Start with white background
 }
 }

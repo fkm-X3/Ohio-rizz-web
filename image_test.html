@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <style>
+        body {
+            font-size: 16px;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #333;
+        }
+
+        .inline-test {
+            margin: 20px 0;
+        }
+
+        .sized-image {
+            width: 200px;
+            height: 150px;
+        }
+
+        .block-container {
+            background-color: #f0f0f0;
+            padding: 10px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Image Test - v0.7</h1>
+
+    <div class="inline-test">
+        <p>This is inline text with an image <img src="test_image.png"> in the middle of the sentence. The text should
+            wrap around it naturally.</p>
+    </div>
+
+    <div class="block-container">
+        <h2>Block Image</h2>
+        <img src="test_image.png">
+        <p>Image above should be displayed as a block element.</p>
+    </div>
+
+    <div>
+        <h2>Sized Image (200x150)</h2>
+        <img src="test_image.png" class="sized-image">
+        <p>This image has explicit CSS width and height.</p>
+    </div>
+
+    <div>
+        <h2>Multiple Images</h2>
+        <img src="test_image.png" style="width: 100px; height: 100px;">
+        <img src="test_image.png" style="width: 100px; height: 100px;">
+        <img src="test_image.png" style="width: 100px; height: 100px;">
+    </div>
+</body>
+
+</html>

@@ -8,6 +8,9 @@
 #include <string>
 #include <vector>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 static const uint8_t font8x16[95][16] = {
     {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
      0x00, 0x00, 0x00, 0x00}, // space
@@ -497,6 +500,11 @@ struct Node {
   std::vector<std::string> classList;
   std::string inline_style;
   std::string href; // Link URL
+  std::string src;  // Image source URL
+
+  // Image data
+  int img_w = 0, img_h = 0, img_channels = 0;
+  std::shared_ptr<std::vector<uint32_t>> img_data;
 
   // Layout results
   Rect margin_box;
@@ -516,6 +524,36 @@ struct Node {
 
   Node() : is_text(false), is_block(false) {}
 };
+
+struct ImageCacheEntry {
+  int w, h;
+  std::shared_ptr<std::vector<uint32_t>> data;
+};
+static std::map<std::string, ImageCacheEntry> image_cache;
+
+static ImageCacheEntry load_image(const std::string &src) {
+  if (image_cache.count(src))
+    return image_cache[src];
+
+  int w, h, channels;
+  unsigned char *data = stbi_load(src.c_str(), &w, &h, &channels, 4);
+  if (!data) {
+    return {0, 0, nullptr};
+  }
+
+  auto vec = std::make_shared<std::vector<uint32_t>>(w * h);
+  for (int i = 0; i < w * h; ++i) {
+    uint8_t r = data[i * 4 + 0];
+    uint8_t g = data[i * 4 + 1];
+    uint8_t b = data[i * 4 + 2];
+    uint8_t a = data[i * 4 + 3];
+    (*vec)[i] = (a << 24) | (r << 16) | (g << 8) | b;
+  }
+  stbi_image_free(data);
+  ImageCacheEntry entry = {w, h, vec};
+  image_cache[src] = entry;
+  return entry;
+}
 
 // Helper to clean whitespace - collapse sequence of whitespace to single space
 std::string clean_whitespace(const std::string &input) {
@@ -631,6 +669,7 @@ std::shared_ptr<Node> parse_html(const std::string &html,
         }
         node->inline_style = extract_attr("style");
         node->href = extract_attr("href");
+        node->src = extract_attr("src");
       }
 
       node->tag = tag_name;
@@ -1085,6 +1124,44 @@ void layout_node(std::shared_ptr<Node> node, int container_w, int line_start_x,
                  node->computed_style.line_height);
     }
 
+    if (node->tag == "img" && !node->src.empty()) {
+      auto entry = load_image(node->src);
+      if (entry.data) {
+        node->img_w = entry.w;
+        node->img_h = entry.h;
+        node->img_data = entry.data;
+
+        // Determine display size. If CSS width/height are set, use them.
+        // Otherwise use intrinsic size scaled by scale_factor.
+        int w = (node->computed_style.width != -1)
+                    ? node->computed_style.width
+                    : (int)(entry.w * scale_factor);
+        int h = (node->computed_style.height != -1)
+                    ? node->computed_style.height
+                    : (int)(entry.h * scale_factor);
+
+        // Inline wrap logic for images
+        if (x + w > container_w && x > line_start_x) {
+          x = line_start_x;
+          double font_scale = (double)current_style.font_size / 16.0;
+          y += (int)(scale_factor * font_scale * 16.0 *
+                     node->computed_style.line_height);
+        }
+
+        node->margin_box.x = x;
+        node->margin_box.y = y;
+        node->margin_box.w = w;
+        node->margin_box.h = h;
+        node->border_box = node->padding_box = node->content_box =
+            node->margin_box;
+
+        x += w;
+        // Images don't have children in this simple engine, so we're done with
+        // this node.
+        return;
+      }
+    }
+
     int box_start_y = y;
     node->margin_box.x = x;
     node->margin_box.y = y;
@@ -1211,6 +1288,49 @@ void paint_node(std::shared_ptr<Node> node, const LayoutState &state,
 
   if (!node->is_text) {
     Style &s = node->computed_style;
+
+    // Render image if this is an <img> tag
+    if (node->tag == "img" && node->img_data) {
+      int dest_w = node->margin_box.w;
+      int dest_h = node->margin_box.h;
+      int src_w = node->img_w;
+      int src_h = node->img_h;
+
+      for (int dy = 0; dy < dest_h; ++dy) {
+        for (int dx = 0; dx < dest_w; ++dx) {
+          // Simple nearest-neighbor scaling
+          int sx = (dx * src_w) / dest_w;
+          int sy = (dy * src_h) / dest_h;
+          if (sx >= 0 && sx < src_w && sy >= 0 && sy < src_h) {
+            uint32_t pixel = (*node->img_data)[sy * src_w + sx];
+            uint8_t a = (pixel >> 24) & 0xFF;
+
+            // Simple alpha blending with white background
+            if (a == 255) {
+              draw_pixel(state.buffer, state.width, state.height,
+                         node->margin_box.x + dx, node->margin_box.y + dy,
+                         pixel);
+            } else if (a > 0) {
+              uint8_t r = (pixel >> 16) & 0xFF;
+              uint8_t g = (pixel >> 8) & 0xFF;
+              uint8_t b = pixel & 0xFF;
+
+              // Blend with white background
+              r = (r * a + 255 * (255 - a)) / 255;
+              g = (g * a + 255 * (255 - a)) / 255;
+              b = (b * a + 255 * (255 - a)) / 255;
+
+              uint32_t blended = 0xFF000000 | (r << 16) | (g << 8) | b;
+              draw_pixel(state.buffer, state.width, state.height,
+                         node->margin_box.x + dx, node->margin_box.y + dy,
+                         blended);
+            }
+          }
+        }
+      }
+      // Images don't have children, so return early
+      return;
+    }
 
     if (s.has_bg) {
       draw_rect(state.buffer, state.width, state.height, node->padding_box.x,
